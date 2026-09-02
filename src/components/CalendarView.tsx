@@ -140,7 +140,11 @@ export default function CalendarView({ refreshKey = 0 }: CalendarViewProps) {
   }
 
   if (loading) {
-    return <div className="text-center py-12 text-[#777777] font-bold">달력 로딩 중...</div>
+    return (
+      <div className="min-h-[720px] flex items-center justify-center text-[#777777] font-bold">
+        달력 로딩 중...
+      </div>
+    )
   }
 
   const weekNames = ['일', '월', '화', '수', '목', '금', '토']

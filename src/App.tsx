@@ -8,7 +8,8 @@ import LoginPage from './components/LoginPage'
 
 const ADMIN_EMAIL = 'kwangjin.owl@gmail.com'
 
-type TabType = '대시보드' | '예약목록' | '예약추가' | '캘린더' | '상태관리' | '위치확인'
+type TabType = '대시보드' | '예약목록' | '예약추가' | '상태관리' | '위치확인'
+type ListViewType = '목록' | '캘린더'
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -17,6 +18,7 @@ export default function App() {
   const [userImage, setUserImage] = useState('')
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('대시보드')
+  const [listView, setListView] = useState<ListViewType>('목록')
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -60,6 +62,7 @@ export default function App() {
 
   const handleFormSuccess = () => {
     setRefreshKey((prev) => prev + 1)
+    setListView('목록')
     setActiveTab('예약목록')
   }
 
@@ -82,9 +85,13 @@ export default function App() {
     { id: '대시보드', label: '대시보드' },
     { id: '예약목록', label: '예약목록' },
     { id: '예약추가', label: '예약추가' },
-    { id: '캘린더', label: '캘린더' },
     { id: '상태관리', label: '상태관리' },
     { id: '위치확인', label: '위치확인' },
+  ]
+
+  const listViews: { id: ListViewType; label: string }[] = [
+    { id: '목록', label: '📋 목록 보기' },
+    { id: '캘린더', label: '📅 캘린더 보기' },
   ]
 
   return (
@@ -155,16 +162,51 @@ export default function App() {
           </div>
         )}
 
-        {/* 예약목록 탭 */}
+        {/* 예약목록 탭 - 목록 / 캘린더 보기 전환 */}
         {activeTab === '예약목록' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-3xl font-black text-[#042c60]">예약 목록</h2>
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div>
+                <h2 className="text-3xl font-black text-[#042c60]">예약 목록</h2>
+                <p className="text-[#777777] mt-1 font-medium">
+                  {listView === '목록'
+                    ? '등록된 모든 예약을 표 형태로 확인합니다.'
+                    : '월별 예약 일정을 캘린더 형태로 조망합니다.'}
+                </p>
+              </div>
               <span className="text-xs font-bold text-[#777777] bg-[#f7f7f7] border-2 border-[#e5e5e5] px-3 py-1.5 rounded-xl">
                 실시간 연동됨
               </span>
             </div>
-            <BookingTable refreshKey={refreshKey} />
+
+            {/* 보기 전환 버튼 */}
+            <div className="flex gap-2 p-1.5 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl w-fit">
+              {listViews.map((view) => {
+                const isActive = listView === view.id
+                return (
+                  <button
+                    key={view.id}
+                    onClick={() => setListView(view.id)}
+                    className={`px-4 py-2 text-xs md:text-sm font-black rounded-xl transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-white text-[#58cc02] border-2 border-[#58cc02] shadow-[0_2px_0_#46a302]'
+                        : 'bg-transparent text-[#777777] border-2 border-transparent hover:text-[#3c3c3c]'
+                    }`}
+                  >
+                    {view.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* 화면 흔들림 방지를 위해 최소 높이를 고정합니다 */}
+            <div className="min-h-[720px]">
+              {listView === '목록' ? (
+                <BookingTable refreshKey={refreshKey} />
+              ) : (
+                <CalendarView refreshKey={refreshKey} />
+              )}
+            </div>
           </div>
         )}
 
@@ -181,22 +223,6 @@ export default function App() {
               </div>
             </div>
             <BookingForm onSuccess={handleFormSuccess} />
-          </div>
-        )}
-
-        {/* 캘린더 탭 */}
-        {activeTab === '캘린더' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="inline-block bg-[#ff9600] text-white text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full mb-2">
-                  SCHEDULE
-                </span>
-                <h2 className="text-3xl font-black text-[#042c60]">캘린더 예약 보기</h2>
-                <p className="text-[#777777] mt-1 font-medium">월별 예약 일정을 캘린더 형태로 한눈에 확인하고 관리하세요.</p>
-              </div>
-            </div>
-            <CalendarView refreshKey={refreshKey} />
           </div>
         )}
 
