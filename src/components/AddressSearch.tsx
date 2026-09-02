@@ -39,12 +39,14 @@ export default function AddressSearch({
 
     timeoutRef.current = setTimeout(async () => {
       try {
-        // 공백 정규화 (여러 공백을 하나로, 앞뒤 공백 제거)
-        const normalizedQuery = value.trim().replace(/\s+/g, ' ')
+        // 1. 일반 검색어
+        const originalQuery = value.trim().replace(/\s+/g, ' ')
+        // 2. 공백 제거 검색어 (예: "천중로 42길" -> "천중로42길")
+        const noSpaceQuery = originalQuery.replace(/\s+/g, '')
 
-        // Nominatim 한글 주소 검색
+        // Nominatim 한글 주소 검색 (두 쿼리를 모두 시도하거나 공백 제거 검색어 활용)
         const searchUrl = new URL('https://nominatim.openstreetmap.org/search')
-        searchUrl.searchParams.append('q', normalizedQuery)
+        searchUrl.searchParams.append('q', noSpaceQuery)
         searchUrl.searchParams.append('format', 'json')
         searchUrl.searchParams.append('limit', '15')
         searchUrl.searchParams.append('countrycodes', 'kr')
@@ -52,7 +54,24 @@ export default function AddressSearch({
         searchUrl.searchParams.append('viewbox', '124.5,33.0,131.9,43.0') // 한반도 범위
 
         const response = await fetch(searchUrl.toString())
-        const data = await response.json()
+        let data = await response.json()
+
+        // 결과가 없거나 적으면 공백이 포함된 원래 검색어로도 재시도
+        if ((!data || data.length === 0) && originalQuery !== noSpaceQuery) {
+          const retryUrl = new URL('https://nominatim.openstreetmap.org/search')
+          retryUrl.searchParams.append('q', originalQuery)
+          retryUrl.searchParams.append('format', 'json')
+          retryUrl.searchParams.append('limit', '15')
+          retryUrl.searchParams.append('countrycodes', 'kr')
+          retryUrl.searchParams.append('accept-language', 'ko')
+          retryUrl.searchParams.append('viewbox', '124.5,33.0,131.9,43.0')
+          
+          const retryResponse = await fetch(retryUrl.toString())
+          const retryData = await retryResponse.json()
+          if (retryData && retryData.length > 0) {
+            data = retryData
+          }
+        }
 
         console.log('검색 응답:', data) // 디버깅
 
@@ -140,7 +159,7 @@ export default function AddressSearch({
       </div>
 
       {showResults && results.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-2xl z-50 max-h-72 overflow-y-auto w-full">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-[#e5e5e5] rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[9999] max-h-72 overflow-y-auto w-full">
           {loading && (
             <div className="px-3 py-3 text-sm text-gray-500 text-center">
               검색 중...

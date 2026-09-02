@@ -65,7 +65,7 @@ export default function MapView({ lat, lon, address }: MapViewProps) {
   }, [lat, lon, address])
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 relative z-0">
       <p className="text-sm font-medium text-gray-700">{address}</p>
       <div
         ref={mapRef}
