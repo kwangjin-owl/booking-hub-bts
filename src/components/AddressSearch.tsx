@@ -39,10 +39,15 @@ export default function AddressSearch({
 
     timeoutRef.current = setTimeout(async () => {
       try {
-        // addressdetails=1로 상세 주소 정보 포함
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&limit=10&countrycodes=kr&addressdetails=1`
-        )
+        // Nominatim 한글 주소 검색 (여러 옵션 시도)
+        const searchUrl = new URL('https://nominatim.openstreetmap.org/search')
+        searchUrl.searchParams.append('q', value)
+        searchUrl.searchParams.append('format', 'json')
+        searchUrl.searchParams.append('limit', '10')
+        searchUrl.searchParams.append('countrycodes', 'kr')
+        searchUrl.searchParams.append('accept-language', 'ko')
+
+        const response = await fetch(searchUrl.toString())
         const data = await response.json()
 
         const formatted: AddressResult[] = data.map((item: any) => ({

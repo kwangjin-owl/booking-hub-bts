@@ -71,11 +71,16 @@ export default function BookingTable({ refreshKey = 0 }: BookingTableProps) {
     setExpandedId(expandedId === booking.id ? null : booking.id)
 
     if (expandedId !== booking.id) {
-      // Nominatim API로 좌표 조회 (addressdetails 포함)
+      // Nominatim API로 좌표 조회
       try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(booking.address)}&format=json&limit=1&addressdetails=1`
-        )
+        const searchUrl = new URL('https://nominatim.openstreetmap.org/search')
+        searchUrl.searchParams.append('q', booking.address)
+        searchUrl.searchParams.append('format', 'json')
+        searchUrl.searchParams.append('limit', '1')
+        searchUrl.searchParams.append('countrycodes', 'kr')
+        searchUrl.searchParams.append('accept-language', 'ko')
+
+        const response = await fetch(searchUrl.toString())
         const data = await response.json()
         if (data.length > 0) {
           setMapData({
