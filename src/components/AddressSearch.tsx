@@ -39,23 +39,36 @@ export default function AddressSearch({
 
     timeoutRef.current = setTimeout(async () => {
       try {
-        // Nominatim 한글 주소 검색 (여러 옵션 시도)
+        // 공백 정규화 (여러 공백을 하나로, 앞뒤 공백 제거)
+        const normalizedQuery = value.trim().replace(/\s+/g, ' ')
+
+        // Nominatim 한글 주소 검색
         const searchUrl = new URL('https://nominatim.openstreetmap.org/search')
-        searchUrl.searchParams.append('q', value)
+        searchUrl.searchParams.append('q', normalizedQuery)
         searchUrl.searchParams.append('format', 'json')
-        searchUrl.searchParams.append('limit', '10')
+        searchUrl.searchParams.append('limit', '15')
         searchUrl.searchParams.append('countrycodes', 'kr')
         searchUrl.searchParams.append('accept-language', 'ko')
+        searchUrl.searchParams.append('viewbox', '124.5,33.0,131.9,43.0') // 한반도 범위
 
         const response = await fetch(searchUrl.toString())
         const data = await response.json()
 
-        const formatted: AddressResult[] = data.map((item: any) => ({
-          address: item.address,
-          lat: parseFloat(item.lat),
-          lon: parseFloat(item.lon),
-          display_name: item.display_name,
-        }))
+        // 결과 정렬 (더 관련성 높은 것부터)
+        const formatted: AddressResult[] = data
+          .filter((item: any) => item.display_name) // 유효한 결과만
+          .map((item: any) => ({
+            address: item.address,
+            lat: parseFloat(item.lat),
+            lon: parseFloat(item.lon),
+            display_name: item.display_name,
+          }))
+          .sort((a: AddressResult, b: AddressResult) => {
+            // 검색어로 시작하는 결과를 앞에 배치
+            const aStarts = a.display_name.startsWith(normalizedQuery)
+            const bStarts = b.display_name.startsWith(normalizedQuery)
+            return aStarts === bStarts ? 0 : aStarts ? -1 : 1
+          })
 
         setResults(formatted)
         setShowResults(true)
@@ -129,7 +142,7 @@ export default function AddressSearch({
       </div>
 
       {showResults && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-10 max-h-72 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-2xl z-50 max-h-72 overflow-y-auto">
           {loading && (
             <div className="px-3 py-3 text-sm text-gray-500 text-center">
               검색 중...

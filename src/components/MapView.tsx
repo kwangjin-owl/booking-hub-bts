@@ -13,24 +13,17 @@ const createCustomIcon = () => {
   return L.divIcon({
     html: `
       <div style="
-        background-color: #3b82f6;
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        width: 40px;
+        height: 40px;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: white;
-        font-weight: bold;
-        font-size: 16px;
-        position: relative;
-        top: -16px;
-        left: -16px;
+        font-size: 24px;
       ">📍</div>
     `,
-    iconSize: [32, 32],
+    iconSize: [40, 40],
+    iconAnchor: [20, 40], // 아이콘의 하단 중심이 좌표에 맞도록
+    popupAnchor: [0, -40], // 팝업이 아이콘 위에 나타나도록
     className: 'custom-marker',
   })
 }
