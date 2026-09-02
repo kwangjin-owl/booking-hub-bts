@@ -23,6 +23,20 @@ export default function AddressSearch({
   const [showResults, setShowResults] = useState(false)
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // 외부 클릭 시 드롭다운 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowResults(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   useEffect(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -137,20 +151,20 @@ export default function AddressSearch({
   }
 
   return (
-    <div className="relative w-full">
-      <div className="flex items-center border border-gray-300 rounded overflow-visible focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200">
+    <div className="relative w-full" ref={containerRef}>
+      <div className="flex items-center bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl overflow-hidden focus-within:border-[#1cb0f6] focus-within:bg-white transition-all">
         <input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => value.length >= 2 && setShowResults(true)}
           onKeyDown={handleKeyDown}
-          className="flex-1 px-3 py-2 outline-none"
-          placeholder="주소 입력 (예: 강남역, 서울 강남구 등)"
+          className="flex-1 px-4 py-3 outline-none font-bold text-[#3c3c3c] bg-transparent"
+          placeholder="주소 입력 (예: 강남역, 천중로 42길 등)"
         />
         {loading && (
-          <div className="px-3 py-2 text-gray-400">
-            <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+          <div className="px-4 py-3 text-[#777777]">
+            <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
@@ -161,13 +175,13 @@ export default function AddressSearch({
       {showResults && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white border-2 border-[#e5e5e5] rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-[9999] max-h-72 overflow-y-auto w-full">
           {loading && (
-            <div className="px-3 py-3 text-sm text-gray-500 text-center">
+            <div className="px-4 py-3 text-sm text-[#777777] text-center font-bold">
               검색 중...
             </div>
           )}
 
           {!loading && results.length === 0 && value.length >= 2 && (
-            <div className="px-3 py-3 text-sm text-gray-500 text-center">
+            <div className="px-4 py-3 text-sm text-[#777777] text-center font-bold">
               검색 결과가 없습니다
             </div>
           )}
@@ -177,26 +191,27 @@ export default function AddressSearch({
               {results.map((result, idx) => (
                 <button
                   key={idx}
+                  type="button"
                   onClick={() => handleSelect(result)}
-                  className={`w-full text-left px-3 py-2.5 border-b border-gray-100 last:border-b-0 text-sm transition-colors ${
+                  className={`w-full text-left px-4 py-3 border-b-2 border-[#e5e5e5] last:border-b-0 text-sm transition-colors cursor-pointer ${
                     selectedIndex === idx
-                      ? 'bg-blue-50'
-                      : 'hover:bg-gray-50'
+                      ? 'bg-[#d7ffb8]/50 text-[#042c60]'
+                      : 'hover:bg-[#f7f7f7]'
                   }`}
                 >
-                  <p className="font-medium text-gray-800 flex items-center gap-2">
+                  <p className="font-black text-[#042c60] flex items-center gap-2">
                     {selectedIndex === idx && (
-                      <span className="text-blue-600">✓</span>
+                      <span className="text-[#58cc02]">✓</span>
                     )}
                     {result.display_name.split(',')[0]}
                   </p>
-                  <p className="text-xs text-gray-500 truncate mt-0.5">
+                  <p className="text-xs text-[#777777] truncate mt-0.5 font-medium">
                     {result.display_name}
                   </p>
                 </button>
               ))}
-              <div className="px-3 py-2 bg-gray-50 text-xs text-gray-500 border-t">
-                화살표 키로 선택, Enter로 확인
+              <div className="px-4 py-2 bg-[#f7f7f7] text-xs text-[#777777] border-t-2 border-[#e5e5e5] font-bold text-center">
+                화살표 키로 선택, Enter로 확인 또는 바깥쪽을 클릭해 닫기
               </div>
             </>
           )}
