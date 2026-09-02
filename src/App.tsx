@@ -97,13 +97,19 @@ export default function App() {
           <h1 className="text-4xl font-bold">예약 관리 허브</h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3">
-              {userImage && (
-                <img
-                  src={userImage}
-                  alt="profile"
-                  className="w-10 h-10 rounded-full"
-                />
-              )}
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                {userImage ? (
+                  <img
+                    src={userImage}
+                    alt="profile"
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="text-white font-bold text-sm">
+                    {userName?.charAt(0).toUpperCase() || 'A'}
+                  </span>
+                )}
+              </div>
               <div className="text-right">
                 <p className="text-sm font-semibold text-gray-800">{userName}</p>
                 <p className="text-xs text-gray-500">{userEmail}</p>
