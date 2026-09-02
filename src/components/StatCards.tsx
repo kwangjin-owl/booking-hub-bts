@@ -72,32 +72,51 @@ export default function StatCards({ refreshKey = 0 }: StatCardsProps) {
     {
       label: '오늘 예약',
       value: todayCount,
-      bgColor: 'bg-blue-50',
-      textColor: 'text-blue-600',
+      bgColor: 'bg-white',
+      borderColor: 'border-[#e5e5e5]',
+      shadowColor: 'shadow-[0_4px_0_#e5e5e5]',
+      textColor: 'text-[#042c60]',
+      badgeColor: 'bg-[#d7ffb8] text-[#58a700]',
+      icon: '📅',
     },
     {
       label: '확정률',
       value: `${confirmRate.toFixed(1)}%`,
-      bgColor: 'bg-green-50',
-      textColor: 'text-green-600',
+      bgColor: 'bg-white',
+      borderColor: 'border-[#e5e5e5]',
+      shadowColor: 'shadow-[0_4px_0_#e5e5e5]',
+      textColor: 'text-[#58cc02]',
+      badgeColor: 'bg-[#d7ffb8] text-[#58a700]',
+      icon: '🎯',
     },
     {
       label: '이번 주 총',
       value: weekCount,
-      bgColor: 'bg-purple-50',
-      textColor: 'text-purple-600',
+      bgColor: 'bg-white',
+      borderColor: 'border-[#e5e5e5]',
+      shadowColor: 'shadow-[0_4px_0_#e5e5e5]',
+      textColor: 'text-[#1cb0f6]',
+      badgeColor: 'bg-[#d7ffb8] text-[#58a700]',
+      icon: '🔥',
     },
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 font-['Pretendard',sans-serif]">
       {cards.map((card, idx) => (
         <div
           key={idx}
-          className={`${card.bgColor} rounded-lg p-6 shadow-sm border border-gray-200`}
+          className={`${card.bgColor} rounded-2xl p-6 border-2 ${card.borderColor} ${card.shadowColor} flex items-center justify-between transition-all hover:-translate-y-1`}
         >
-          <p className="text-sm text-gray-600 mb-2">{card.label}</p>
-          <p className={`text-3xl font-bold ${card.textColor}`}>{card.value}</p>
+          <div>
+            <span className="inline-block text-xs font-black uppercase tracking-wider text-[#777777] mb-1">
+              {card.label}
+            </span>
+            <p className={`text-4xl font-black ${card.textColor}`}>{card.value}</p>
+          </div>
+          <div className="w-14 h-14 rounded-2xl bg-[#f7f7f7] border-2 border-[#e5e5e5] flex items-center justify-center text-2xl shadow-[0_3px_0_#e5e5e5]">
+            {card.icon}
+          </div>
         </div>
       ))}
     </div>

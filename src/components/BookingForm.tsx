@@ -68,60 +68,68 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg border border-gray-200 mb-8 overflow-visible">
-      <h2 className="text-2xl font-bold mb-6">새로운 예약</h2>
+    <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] mb-8 overflow-visible font-['Pretendard',sans-serif]">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-2xl bg-[#58cc02] flex items-center justify-center text-white text-xl font-black shadow-[0_3px_0_#46a302]">
+          📝
+        </div>
+        <div>
+          <h2 className="text-2xl font-black text-[#042c60]">새로운 예약</h2>
+          <p className="text-xs text-[#777777] font-bold">필수 정보를 입력하여 예약을 등록하세요</p>
+        </div>
+      </div>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-100 text-red-700 rounded">
+        <div className="mb-6 p-4 bg-[#ff4b4b]/10 border-2 border-[#ff4b4b] rounded-2xl text-[#ff4b4b] text-xs font-black">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 relative">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 relative">
         <div>
-          <label className="block text-sm font-medium mb-2">고객사 *</label>
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">고객사 *</label>
           <input
             type="text"
             value={customer}
             onChange={(e) => setCustomer(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
             placeholder="고객사 이름"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">서비스 *</label>
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">서비스 *</label>
           <input
             type="text"
             value={service}
             onChange={(e) => setService(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
             placeholder="서비스 유형"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">날짜 *</label>
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">날짜 *</label>
           <input
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-2">시간 *</label>
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">시간 *</label>
           <input
             type="time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+            className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
           />
         </div>
 
         <div className="md:col-span-2 relative z-20">
-          <label className="block text-sm font-medium mb-2">주소</label>
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">주소</label>
           <AddressSearch
             value={address}
             onChange={setAddress}
@@ -131,7 +139,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       </div>
 
       {selectedLocation && (
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mb-6 p-4 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl">
           <MapView
             lat={selectedLocation.lat}
             lon={selectedLocation.lon}
@@ -143,9 +151,9 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-blue-600 text-white font-semibold py-2 rounded hover:bg-blue-700 disabled:bg-gray-400"
+        className="w-full bg-[#58cc02] hover:bg-[#46a302] disabled:bg-gray-300 text-white font-black py-4 px-6 rounded-2xl transition-all uppercase tracking-wider text-sm shadow-[0_4px_0_#46a302] active:translate-y-[4px] active:shadow-none cursor-pointer"
       >
-        {loading ? '예약 중...' : '예약하기'}
+        {loading ? '예약 처리 중...' : '예약하기'}
       </button>
     </form>
   )

@@ -91,83 +91,92 @@ export default function BookingTable({ refreshKey = 0 }: BookingTableProps) {
   }
 
   if (loading) {
-    return <div className="text-center py-8 text-gray-600">로딩 중...</div>
+    return <div className="text-center py-12 text-[#777777] font-bold">로딩 중...</div>
   }
 
   if (bookings.length === 0) {
-    return <div className="text-center py-8 text-gray-600">예약이 없습니다</div>
+    return (
+      <div className="bg-white p-12 rounded-2xl border-2 border-[#e5e5e5] text-center font-['Pretendard',sans-serif]">
+        <div className="text-4xl mb-3">📭</div>
+        <p className="text-[#777777] font-bold">등록된 예약이 없습니다</p>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse border border-gray-300">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border border-gray-300 px-4 py-2 text-left">고객사</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">서비스</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">날짜</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">시간</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">위치</th>
-              <th className="border border-gray-300 px-4 py-2 text-left">상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bookings.map((booking) => (
-              <tr key={booking.id} className="hover:bg-gray-50">
-                <td className="border border-gray-300 px-4 py-2">{booking.customer}</td>
-                <td className="border border-gray-300 px-4 py-2">{booking.service}</td>
-                <td className="border border-gray-300 px-4 py-2">{booking.date}</td>
-                <td className="border border-gray-300 px-4 py-2">{booking.time}</td>
-                <td className="border border-gray-300 px-4 py-2">
-                  {booking.address ? (
-                    <button
-                      onClick={() => handleShowMap(booking)}
-                      className="text-blue-600 underline hover:text-blue-800 font-medium"
-                    >
-                      {expandedId === booking.id ? '✓ ' : ''}
-                      {booking.address.substring(0, 20)}...
-                    </button>
-                  ) : (
-                    '-'
-                  )}
-                </td>
-                <td className="border border-gray-300 px-4 py-2">
-                  <button
-                    onClick={() => handleStatusToggle(booking.id, booking.status)}
-                    className={`px-3 py-1 rounded text-sm font-semibold cursor-pointer ${
-                      booking.status === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                        : 'bg-green-100 text-green-800 hover:bg-green-200'
-                    }`}
-                  >
-                    {booking.status === 'pending' ? '대기' : '확정'}
-                  </button>
-                </td>
+    <div className="space-y-6 font-['Pretendard',sans-serif]">
+      <div className="bg-white rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-[#f7f7f7] border-b-2 border-[#e5e5e5] text-[#777777] text-xs font-black uppercase tracking-wider">
+                <th className="px-6 py-4 text-left">고객사</th>
+                <th className="px-6 py-4 text-left">서비스</th>
+                <th className="px-6 py-4 text-left">날짜</th>
+                <th className="px-6 py-4 text-left">시간</th>
+                <th className="px-6 py-4 text-left">위치</th>
+                <th className="px-6 py-4 text-left">상태</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y-2 divide-[#e5e5e5]">
+              {bookings.map((booking) => (
+                <tr key={booking.id} className="hover:bg-[#f7f7f7]/50 transition-colors">
+                  <td className="px-6 py-4 font-black text-[#042c60]">{booking.customer}</td>
+                  <td className="px-6 py-4 font-bold text-[#3c3c3c]">{booking.service}</td>
+                  <td className="px-6 py-4 font-bold text-[#777777]">{booking.date}</td>
+                  <td className="px-6 py-4 font-bold text-[#777777]">{booking.time}</td>
+                  <td className="px-6 py-4 font-medium">
+                    {booking.address ? (
+                      <button
+                        onClick={() => handleShowMap(booking)}
+                        className="text-[#1cb0f6] font-black underline hover:text-[#0d99dc] cursor-pointer inline-flex items-center gap-1"
+                      >
+                        {expandedId === booking.id ? '✓ ' : ''}
+                        {booking.address.substring(0, 15)}...
+                      </button>
+                    ) : (
+                      <span className="text-[#afafaf]">-</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => handleStatusToggle(booking.id, booking.status)}
+                      className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer transition-all shadow-[0_2px_0_rgba(0,0,0,0.1)] active:translate-y-[2px] active:shadow-none ${
+                        booking.status === 'pending'
+                          ? 'bg-[#ffc800] text-[#042c60] hover:bg-[#e6b400]'
+                          : 'bg-[#58cc02] text-white hover:bg-[#46a302]'
+                      }`}
+                    >
+                      {booking.status === 'pending' ? '대기 중' : '확정 완료'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {expandedId && mapData && (
-        <div className="bg-gray-50 p-6 rounded-lg border border-gray-200">
-          <div className="mb-2 flex justify-between items-center">
-            <h3 className="font-semibold text-gray-800">
-              {bookings.find((b) => b.id === expandedId)?.address}
+        <div className="bg-white p-6 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] animate-fade-in">
+          <div className="mb-4 flex justify-between items-center">
+            <h3 className="font-black text-[#042c60] text-lg">
+              📍 {bookings.find((b) => b.id === expandedId)?.address}
             </h3>
             <button
               onClick={() => setExpandedId(null)}
-              className="text-gray-500 hover:text-gray-700 text-lg"
+              className="w-8 h-8 rounded-xl bg-[#f7f7f7] border-2 border-[#e5e5e5] text-[#777777] font-black hover:bg-[#ff4b4b] hover:text-white hover:border-[#ff4b4b] transition-colors flex items-center justify-center cursor-pointer"
             >
               ✕
             </button>
           </div>
-          <MapView
-            lat={mapData.lat}
-            lon={mapData.lon}
-            address={bookings.find((b) => b.id === expandedId)?.address || ''}
-          />
+          <div className="rounded-xl overflow-hidden border-2 border-[#e5e5e5]">
+            <MapView
+              lat={mapData.lat}
+              lon={mapData.lon}
+              address={bookings.find((b) => b.id === expandedId)?.address || ''}
+            />
+          </div>
         </div>
       )}
     </div>

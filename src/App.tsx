@@ -86,40 +86,45 @@ export default function App() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 헤더 */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto p-6 flex justify-between items-center">
-          <h1 className="text-4xl font-bold">예약 관리 허브</h1>
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
-              {userImage ? (
-                <img
-                  src={userImage}
-                  alt="profile"
-                  className="w-12 h-12 rounded-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none'
-                  }}
-                />
-              ) : (
-                <span className="text-white font-bold">
-                  {userName?.charAt(0).toUpperCase() || 'A'}
-                </span>
-              )}
+    <div className="min-h-screen bg-white text-[#3c3c3c] pb-24 font-['Pretendard',sans-serif]">
+      {/* 듀오링고 스타일 탑 내비게이션 바 */}
+      <div className="bg-white border-b-2 border-[#e5e5e5] sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-6 h-[70px] flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-[#58cc02] flex items-center justify-center text-white font-black text-xl shadow-[0_4px_0_#46a302]">
+              🦉
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-gray-800">{userName}</p>
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">
-                  관리자
-                </span>
+            <h1 className="text-2xl font-black text-[#042c60] tracking-tight">예약 관리 허브</h1>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] px-3 py-1.5 rounded-2xl">
+              <div className="w-9 h-9 rounded-full bg-[#58cc02] flex items-center justify-center flex-shrink-0 text-white font-bold">
+                {userImage ? (
+                  <img
+                    src={userImage}
+                    alt="profile"
+                    className="w-9 h-9 rounded-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none'
+                    }}
+                  />
+                ) : (
+                  <span>{userName?.charAt(0).toUpperCase() || 'A'}</span>
+                )}
               </div>
-              <p className="text-xs text-gray-500">{userEmail}</p>
+              <div className="hidden sm:block">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-xs font-bold text-[#3c3c3c]">{userName}</p>
+                  <span className="px-2 py-0.5 bg-[#d7ffb8] text-[#58a700] text-[10px] font-black uppercase rounded-full">
+                    관리자
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#777777]">{userEmail}</p>
+              </div>
             </div>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors ml-4"
+              className="bg-white text-[#ff4b4b] border-2 border-[#e5e5e5] hover:border-[#ff4b4b] px-4 py-2 text-xs font-black uppercase rounded-2xl transition-all shadow-[0_3px_0_#e5e5e5] active:translate-y-[3px] active:shadow-none cursor-pointer"
             >
               로그아웃
             </button>
@@ -127,67 +132,96 @@ export default function App() {
         </div>
       </div>
 
-      {/* 본문 */}
-      <div className="max-w-6xl mx-auto p-6">
+      {/* 본문 영역 */}
+      <div className="max-w-6xl mx-auto p-6 md:p-8">
         {/* 대시보드 탭 */}
         {activeTab === '대시보드' && (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">대시보드</h2>
+          <div className="space-y-6">
+            <div className="bg-[#d7ffb8]/30 border-2 border-[#a5ed6e] p-6 rounded-2xl flex items-center justify-between">
+              <div>
+                <span className="inline-block bg-[#58cc02] text-white text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full mb-2">
+                  FREE. FUN. EFFECTIVE.
+                </span>
+                <h2 className="text-3xl font-black text-[#042c60]">오늘의 예약 현황을 한눈에 확인하세요!</h2>
+                <p className="text-[#777777] mt-1 font-medium">듀오링고 스타일로 새롭게 단장된 프리미엄 예약 관리 허브입니다.</p>
+              </div>
+              <div className="hidden md:block text-5xl">
+                🚀
+              </div>
+            </div>
             <StatCards refreshKey={refreshKey} />
           </div>
         )}
 
         {/* 예약목록 탭 */}
         {activeTab === '예약목록' && (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">예약 목록</h2>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-3xl font-black text-[#042c60]">예약 목록</h2>
+              <span className="text-xs font-bold text-[#777777] bg-[#f7f7f7] border-2 border-[#e5e5e5] px-3 py-1.5 rounded-xl">
+                실시간 연동됨
+              </span>
+            </div>
             <BookingTable refreshKey={refreshKey} />
           </div>
         )}
 
         {/* 예약추가 탭 */}
         {activeTab === '예약추가' && (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">새로운 예약</h2>
+          <div className="space-y-6 max-w-2xl mx-auto">
+            <div className="text-center mb-6">
+              <span className="inline-block bg-[#1cb0f6] text-white text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full mb-2">
+                NEW BOOKING
+              </span>
+              <h2 className="text-3xl font-black text-[#042c60]">새로운 예약 등록</h2>
+              <p className="text-[#777777] mt-1">필수 정보를 입력하여 새로운 예약을 간편하게 추가하세요.</p>
+            </div>
             <BookingForm onSuccess={handleFormSuccess} />
           </div>
         )}
 
         {/* 상태관리 탭 */}
         {activeTab === '상태관리' && (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">상태 관리</h2>
-            <p className="text-gray-600 mb-4">예약의 상태를 변경할 수 있습니다. 배지를 클릭하면 pending(대기)과 confirmed(확정)이 토글됩니다.</p>
+          <div className="space-y-6">
+            <div className="bg-[#f7f7f7] border-2 border-[#e5e5e5] p-6 rounded-2xl">
+              <h2 className="text-3xl font-black text-[#042c60] mb-2">상태 관리</h2>
+              <p className="text-[#777777] font-medium">예약의 상태를 대기(Pending)와 확정(Confirmed) 간에 간편하게 전환할 수 있습니다. 배지를 클릭해 보세요!</p>
+            </div>
             <BookingTable refreshKey={refreshKey} />
           </div>
         )}
 
         {/* 위치확인 탭 */}
         {activeTab === '위치확인' && (
-          <div>
-            <h2 className="text-2xl font-bold mb-6">위치 확인</h2>
-            <p className="text-gray-600 mb-4">주소를 클릭하면 Google Maps에서 해당 위치를 확인할 수 있습니다.</p>
+          <div className="space-y-6">
+            <div className="bg-[#f7f7f7] border-2 border-[#e5e5e5] p-6 rounded-2xl">
+              <h2 className="text-3xl font-black text-[#042c60] mb-2">위치 확인</h2>
+              <p className="text-[#777777] font-medium">등록된 주소 링크를 클릭하여 OpenStreetMap 지도를 통해 위치를 시각적으로 확인하세요.</p>
+            </div>
             <BookingTable refreshKey={refreshKey} />
           </div>
         )}
       </div>
 
-      {/* 하단 탭 바 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg">
+      {/* 하단 듀오링고 스타일 탭 네비게이션 바 */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-[#e5e5e5] shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-40">
         <div className="max-w-6xl mx-auto flex">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 py-4 px-3 text-center font-semibold transition-colors ${
-                activeTab === tab.id
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 py-3.5 px-2 text-center font-black text-xs md:text-sm uppercase tracking-wider transition-all cursor-pointer flex flex-col items-center gap-1 ${
+                  isActive
+                    ? 'text-[#58cc02] border-t-4 border-[#58cc02] bg-[#f7f7f7]/50'
+                    : 'text-[#777777] hover:text-[#3c3c3c] hover:bg-[#f7f7f7]/30'
+                }`}
+              >
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>
