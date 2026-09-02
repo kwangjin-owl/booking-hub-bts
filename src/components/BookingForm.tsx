@@ -46,8 +46,12 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     })
 
     if (insertError) {
-      console.error('추가 실패:', insertError)
-      setError('예약 추가에 실패했습니다')
+      console.error('추가 실패 상세:', {
+        message: insertError.message,
+        code: insertError.code,
+        details: insertError.details,
+      })
+      setError(`예약 추가 실패: ${insertError.message}`)
       setLoading(false)
       return
     }
