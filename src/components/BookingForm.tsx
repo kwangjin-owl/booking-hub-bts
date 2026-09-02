@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import AddressSearch from './AddressSearch'
+import MapView from './MapView'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -9,12 +11,20 @@ interface BookingFormProps {
   onSuccess?: () => void
 }
 
+interface AddressResult {
+  address: string
+  lat: number
+  lon: number
+  display_name: string
+}
+
 export default function BookingForm({ onSuccess }: BookingFormProps) {
   const [customer, setCustomer] = useState('')
   const [service, setService] = useState('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [address, setAddress] = useState('')
+  const [selectedLocation, setSelectedLocation] = useState<AddressResult | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -52,6 +62,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     setDate('')
     setTime('')
     setAddress('')
+    setSelectedLocation(null)
     setLoading(false)
     onSuccess?.()
   }
@@ -111,15 +122,23 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
 
         <div className="md:col-span-2">
           <label className="block text-sm font-medium mb-2">주소</label>
-          <input
-            type="text"
+          <AddressSearch
             value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
-            placeholder="고객사 주소"
+            onChange={setAddress}
+            onSelect={setSelectedLocation}
           />
         </div>
       </div>
+
+      {selectedLocation && (
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <MapView
+            lat={selectedLocation.lat}
+            lon={selectedLocation.lon}
+            address={selectedLocation.display_name}
+          />
+        </div>
+      )}
 
       <button
         type="submit"

@@ -16,16 +16,20 @@ type TabType = '대시보드' | '예약목록' | '예약추가' | '상태관리'
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userEmail, setUserEmail] = useState('')
+  const [userName, setUserName] = useState('')
+  const [userImage, setUserImage] = useState('')
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('대시보드')
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     const checkAuth = async () => {
-      const { data, error } = await supabase.auth.getSession()
+      const { data } = await supabase.auth.getSession()
       if (data?.session?.user?.email === ADMIN_EMAIL) {
         setIsLoggedIn(true)
         setUserEmail(data.session.user.email)
+        setUserName(data.session.user.user_metadata?.full_name || 'Admin')
+        setUserImage(data.session.user.user_metadata?.avatar_url || '')
       }
       setLoading(false)
     }
@@ -38,9 +42,13 @@ export default function App() {
       if (event === 'SIGNED_IN' && session?.user?.email === ADMIN_EMAIL) {
         setIsLoggedIn(true)
         setUserEmail(session.user.email || '')
+        setUserName(session.user.user_metadata?.full_name || 'Admin')
+        setUserImage(session.user.user_metadata?.avatar_url || '')
       } else if (event === 'SIGNED_OUT') {
         setIsLoggedIn(false)
         setUserEmail('')
+        setUserName('')
+        setUserImage('')
       }
     })
 
@@ -88,7 +96,22 @@ export default function App() {
         <div className="max-w-6xl mx-auto p-6 flex justify-between items-center">
           <h1 className="text-4xl font-bold">예약 관리 허브</h1>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{userEmail}</span>
+            <div className="flex items-center gap-3">
+              {userImage && (
+                <img
+                  src={userImage}
+                  alt="profile"
+                  className="w-10 h-10 rounded-full"
+                />
+              )}
+              <div className="text-right">
+                <p className="text-sm font-semibold text-gray-800">{userName}</p>
+                <p className="text-xs text-gray-500">{userEmail}</p>
+                <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">
+                  관리자 모드
+                </span>
+              </div>
+            </div>
             <button
               onClick={handleLogout}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
