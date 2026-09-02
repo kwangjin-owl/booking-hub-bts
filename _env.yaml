@@ -1,0 +1,51 @@
+# 이 회차의 값. 실습 폴더에서 손대는 파일은 이것 하나다.
+#
+# kind 가 갈림길이다. python 이면 파이썬 블록을, web 이면 웹 블록을 쓰고
+# 안 쓰는 블록은 지운다. 아래 선택 항목은 값이 없으면 AGENTS.md 의 그 절을 건너뛴다.
+#
+# 값을 정할 때 - 버전은 그날 실제로 돌려본 조합을 적는다. 부등호를 넓게 두면
+# "됐다가 안 됐다가" 가 난다(260827 D28 현장 실측).
+
+kind: "web"
+
+# ---------- kind: web ----------
+node_min: "20"            # Vite 8 이 요구한다. 18 이면 설치가 도중에 죽는다
+packages: []              # package.json 에 다 적혀 있다. npm install 한 번이면 끝난다
+port: 5173                # Vite 기본 포트
+
+# ---------- 두 갈래 공통 ----------
+entry: "index.html"
+check: "check.mjs"
+check_expect:             # 이 줄들이 다 나와야 통과다
+  - "키 OK"
+  - "표 OK"
+expect_url: "localhost"
+reset:                    # 없다
+
+env_file:
+  example: ".env.example"
+  required_keys:
+    - VITE_SUPABASE_URL
+    - VITE_SUPABASE_ANON_KEY
+key_source: "supabase.com -> 내 프로젝트 -> Settings -> API"
+
+# ---------- 선택: 값이 없으면 그 절을 건너뛴다 ----------
+sql_file: "_table.sql"
+table: "bookings"
+# design: true            # 화면은 프롬프트 13개가 만든다. shadcn 을 쓰지 않는다
+# repo:                   # GitHub 는 D33
+# deploy:                 # 배포도 D33
+
+# 로그인·회원가입·개인정보·공개배포가 있으면 true. pipa/ 가 함께 배포된다.
+# D32 는 로컬에서만 돌고 로그인이 없다. 표에 들어가는 것은 고객사(법인) 이름과
+# 회사 주소뿐이다. 배포는 D33 이고 그때 --login 으로 다시 만든다.
+login: false
+
+# 오늘 통과 판정 - 눈으로 보는 것만 적는다
+pass_check:
+  - "브라우저에 파란 글자 연결 테스트가 뜬다"
+  - "예약 목록 표에 줄이 보인다"
+  - "폼에 넣고 버튼을 누르면 표에 새 줄이 생긴다"
+  - "상태 배지를 누르면 pending 과 confirmed 가 바뀐다"
+  - "주소를 누르면 지도가 열린다"
+  - "하단 탭 5개가 각각 다른 화면을 연다"
