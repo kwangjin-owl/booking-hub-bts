@@ -54,21 +54,19 @@ export default function AddressSearch({
         const response = await fetch(searchUrl.toString())
         const data = await response.json()
 
+        console.log('검색 응답:', data) // 디버깅
+
         // 결과 정렬 (더 관련성 높은 것부터)
         const formatted: AddressResult[] = data
           .filter((item: any) => item.display_name) // 유효한 결과만
           .map((item: any) => ({
-            address: item.address,
+            address: item.address || '',
             lat: parseFloat(item.lat),
             lon: parseFloat(item.lon),
             display_name: item.display_name,
           }))
-          .sort((a: AddressResult, b: AddressResult) => {
-            // 검색어로 시작하는 결과를 앞에 배치
-            const aStarts = a.display_name.startsWith(normalizedQuery)
-            const bStarts = b.display_name.startsWith(normalizedQuery)
-            return aStarts === bStarts ? 0 : aStarts ? -1 : 1
-          })
+
+        console.log('포맷된 결과:', formatted) // 디버깅
 
         setResults(formatted)
         setShowResults(true)
@@ -120,8 +118,8 @@ export default function AddressSearch({
   }
 
   return (
-    <div className="relative">
-      <div className="flex items-center border border-gray-300 rounded overflow-hidden focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200">
+    <div className="relative w-full">
+      <div className="flex items-center border border-gray-300 rounded overflow-visible focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200">
         <input
           type="text"
           value={value}
@@ -141,8 +139,8 @@ export default function AddressSearch({
         )}
       </div>
 
-      {showResults && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-2xl z-50 max-h-72 overflow-y-auto">
+      {showResults && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded shadow-2xl z-50 max-h-72 overflow-y-auto w-full">
           {loading && (
             <div className="px-3 py-3 text-sm text-gray-500 text-center">
               검색 중...

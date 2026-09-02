@@ -64,7 +64,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg border border-gray-200 mb-8">
+    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg border border-gray-200 mb-8 overflow-visible">
       <h2 className="text-2xl font-bold mb-6">새로운 예약</h2>
 
       {error && (
@@ -73,7 +73,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 relative">
         <div>
           <label className="block text-sm font-medium mb-2">고객사 *</label>
           <input
@@ -116,7 +116,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
           />
         </div>
 
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 relative z-20">
           <label className="block text-sm font-medium mb-2">주소</label>
           <AddressSearch
             value={address}
