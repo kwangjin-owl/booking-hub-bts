@@ -39,8 +39,9 @@ export default function AddressSearch({
 
     timeoutRef.current = setTimeout(async () => {
       try {
+        // addressdetails=1로 상세 주소 정보 포함
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&limit=7&countrycodes=kr`
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(value)}&format=json&limit=10&countrycodes=kr&addressdetails=1`
         )
         const data = await response.json()
 

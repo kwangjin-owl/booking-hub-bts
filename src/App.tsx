@@ -93,16 +93,8 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto p-6">
-          <div className="flex justify-between items-start mb-4">
-            <h1 className="text-4xl font-bold">예약 관리 허브</h1>
-            <button
-              onClick={handleLogout}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors"
-            >
-              로그아웃
-            </button>
-          </div>
+        <div className="max-w-6xl mx-auto p-6 flex justify-between items-center">
+          <h1 className="text-4xl font-bold">예약 관리 허브</h1>
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
               {userImage ? (
@@ -120,7 +112,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <div className="flex-1">
+            <div>
               <div className="flex items-center gap-2">
                 <p className="text-sm font-semibold text-gray-800">{userName}</p>
                 <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-bold rounded">
@@ -129,6 +121,12 @@ export default function App() {
               </div>
               <p className="text-xs text-gray-500">{userEmail}</p>
             </div>
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded transition-colors ml-4"
+            >
+              로그아웃
+            </button>
           </div>
         </div>
       </div>
