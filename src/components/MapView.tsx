@@ -2,21 +2,37 @@ import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
-// Leaflet 마커 이미지 설정 (CDN)
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
-import markerIcon from 'leaflet/dist/images/marker-icon.png'
-import markerShadow from 'leaflet/dist/images/marker-shadow.png'
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-})
-
 interface MapViewProps {
   lat: number
   lon: number
   address: string
+}
+
+// 커스텀 마커 아이콘 (CSS 기반)
+const createCustomIcon = () => {
+  return L.divIcon({
+    html: `
+      <div style="
+        background-color: #3b82f6;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 3px solid white;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+        font-size: 16px;
+        position: relative;
+        top: -16px;
+        left: -16px;
+      ">📍</div>
+    `,
+    iconSize: [32, 32],
+    className: 'custom-marker',
+  })
 }
 
 export default function MapView({ lat, lon, address }: MapViewProps) {
@@ -39,9 +55,10 @@ export default function MapView({ lat, lon, address }: MapViewProps) {
       maxZoom: 19,
     }).addTo(map)
 
-    L.marker([lat, lon])
+    // 커스텀 마커 추가
+    L.marker([lat, lon], { icon: createCustomIcon() })
       .addTo(map)
-      .bindPopup(address || '위치')
+      .bindPopup(`<div style="font-size: 12px; padding: 4px;">${address || '위치'}</div>`)
       .openPopup()
 
     mapInstanceRef.current = map
