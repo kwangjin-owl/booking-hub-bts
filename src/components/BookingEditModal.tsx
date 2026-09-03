@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import AddressSearch from './AddressSearch'
+import LocationPicker from './LocationPicker'
 import TimeSelect from './TimeSelect'
-import MapView from './MapView'
 
 export interface EditableBooking {
   id: number
@@ -19,13 +18,6 @@ export interface EditDraft {
   date: string
   time: string
   address: string
-}
-
-interface AddressResult {
-  address: string
-  lat: number
-  lon: number
-  display_name: string
 }
 
 interface BookingEditModalProps {
@@ -50,8 +42,6 @@ export default function BookingEditModal({
   }
 
   const [draft, setDraft] = useState<EditDraft>(initial)
-  const [location, setLocation] = useState<AddressResult | null>(null)
-  const [addressOpen, setAddressOpen] = useState(false)
   const [error, setError] = useState('')
 
   const isDirty = (Object.keys(initial) as (keyof EditDraft)[]).some(
@@ -169,24 +159,15 @@ export default function BookingEditModal({
               />
             </div>
 
-            {/* 예약추가 폼과 같은 주소 검색을 쓴다 */}
-            <div className="md:col-span-2 relative z-20">
+            {/* 예약추가 폼과 같은 주소 선택기를 쓴다 */}
+            <div className="md:col-span-2">
               <label className={labelClass}>주소</label>
-              <AddressSearch
+              <LocationPicker
                 value={draft.address}
                 onChange={(address) => setDraft({ ...draft, address })}
-                onSelect={setLocation}
-                onOpenChange={setAddressOpen}
               />
             </div>
           </div>
-
-          {/* 검색 목록이 지도를 덮어 지저분해지므로, 고르는 동안에는 지도를 감춘다 */}
-          {location && !addressOpen && (
-            <div className="mb-6 p-4 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl">
-              <MapView lat={location.lat} lon={location.lon} address={location.display_name} />
-            </div>
-          )}
         </div>
 
         {/* 꼬리말 */}

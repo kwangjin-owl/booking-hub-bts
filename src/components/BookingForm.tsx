@@ -1,18 +1,10 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
-import AddressSearch from './AddressSearch'
+import LocationPicker from './LocationPicker'
 import TimeSelect from './TimeSelect'
-import MapView from './MapView'
 
 interface BookingFormProps {
   onSuccess?: () => void
-}
-
-interface AddressResult {
-  address: string
-  lat: number
-  lon: number
-  display_name: string
 }
 
 export default function BookingForm({ onSuccess }: BookingFormProps) {
@@ -21,8 +13,6 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [address, setAddress] = useState('')
-  const [selectedLocation, setSelectedLocation] = useState<AddressResult | null>(null)
-  const [addressOpen, setAddressOpen] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -39,7 +29,6 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     setLoading(true)
 
     // RLS 의 insert 정책이 user_id = auth.uid() 를 요구한다.
-    // 로그인한 본인 id 를 반드시 같이 넣어야 저장된다.
     const { data: sessionData } = await supabase.auth.getSession()
     const userId = sessionData?.session?.user?.id
 
@@ -77,8 +66,6 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     setDate('')
     setTime('')
     setAddress('')
-    setSelectedLocation(null)
-    setAddressOpen(false)
     setLoading(false)
     onSuccess?.()
   }
@@ -139,27 +126,11 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
           <TimeSelect value={time} onChange={setTime} />
         </div>
 
-        <div className="md:col-span-2 relative z-20">
+        <div className="md:col-span-2">
           <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">주소</label>
-          <AddressSearch
-            value={address}
-            onChange={setAddress}
-            onSelect={setSelectedLocation}
-            onOpenChange={setAddressOpen}
-          />
+          <LocationPicker value={address} onChange={setAddress} />
         </div>
       </div>
-
-      {/* 검색 목록이 지도를 덮어 지저분해지므로, 고르는 동안에는 지도를 감춘다 */}
-      {selectedLocation && !addressOpen && (
-        <div className="mb-6 p-4 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl">
-          <MapView
-            lat={selectedLocation.lat}
-            lon={selectedLocation.lon}
-            address={selectedLocation.display_name}
-          />
-        </div>
-      )}
 
       <button
         type="submit"
