@@ -72,16 +72,6 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] mb-8 relative z-30 font-['Pretendard',sans-serif]">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 rounded-2xl bg-[#58cc02] flex items-center justify-center text-white text-xl font-black shadow-[0_3px_0_#46a302]">
-          📝
-        </div>
-        <div>
-          <h2 className="text-2xl font-black text-[#042c60]">새로운 예약</h2>
-          <p className="text-xs text-[#777777] font-bold">필수 정보를 입력하여 예약을 등록하세요</p>
-        </div>
-      </div>
-
       {error && (
         <div className="mb-6 p-4 bg-[#ff4b4b]/10 border-2 border-[#ff4b4b] rounded-2xl text-[#ff4b4b] text-xs font-black">
           {error}

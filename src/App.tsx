@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import { isAdminEmail } from './lib/auth'
+import PageHeader from './components/PageHeader'
 import BookingTable from './components/BookingTable'
 import BookingForm from './components/BookingForm'
 import StatCards from './components/StatCards'
@@ -188,47 +189,35 @@ export default function App() {
       <div className="max-w-6xl mx-auto p-6 md:p-8">
         {activeTab === '대시보드' && (
           <div className="space-y-6">
-            <div className="bg-[#d7ffb8]/30 border-2 border-[#a5ed6e] p-6 rounded-2xl flex items-center justify-between">
-              <div>
-                <span className="inline-block bg-[#58cc02] text-white text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full mb-2">
-                  {isAdmin ? 'ADMIN DASHBOARD' : 'MY BOOKINGS'}
-                </span>
-                <h2 className="text-3xl font-black text-[#042c60]">
-                  {isAdmin
-                    ? '오늘의 예약 현황을 한눈에 확인하세요!'
-                    : '내 예약 현황을 확인하세요!'}
-                </h2>
-                <p className="text-[#777777] mt-1 font-medium">
-                  {isAdmin
-                    ? '전체 예약을 관리하고 확정할 수 있습니다.'
-                    : '등록한 예약은 관리자가 확인 후 확정합니다.'}
-                </p>
-              </div>
-              <div className="hidden md:block text-5xl">🚀</div>
-            </div>
+            <PageHeader
+              title="대시보드"
+              description={
+                isAdmin
+                  ? '전체 예약 현황을 한눈에 확인하고 관리하세요.'
+                  : '등록한 예약은 관리자가 확인 후 확정합니다.'
+              }
+            />
             <StatCards refreshKey={refreshKey} />
           </div>
         )}
 
         {activeTab === '예약' && (
           <div className="space-y-6">
-            <div className="flex items-start justify-between flex-wrap gap-4">
-              <div>
-                <h2 className="text-3xl font-black text-[#042c60]">
-                  {isAdmin ? '예약 관리' : '내 예약'}
-                </h2>
-                <p className="text-[#777777] mt-1 font-medium">
-                  {listView === '캘린더'
-                    ? '월별 예약 일정을 캘린더 형태로 조망합니다.'
-                    : isAdmin
-                      ? '검색과 상태 필터로 예약을 찾고, 확정·수정·삭제할 수 있습니다.'
-                      : '내가 등록한 예약을 확인합니다. 주소를 누르면 지도가 열립니다.'}
-                </p>
-              </div>
-              <span className="text-xs font-bold text-[#777777] bg-[#f7f7f7] border-2 border-[#e5e5e5] px-3 py-1.5 rounded-xl">
-                실시간 연동됨
-              </span>
-            </div>
+            <PageHeader
+              title={isAdmin ? '예약 관리' : '내 예약'}
+              description={
+                listView === '캘린더'
+                  ? '월별 예약 일정을 캘린더 형태로 조망합니다.'
+                  : isAdmin
+                    ? '검색과 상태 필터로 예약을 찾고, 확정·수정·삭제할 수 있습니다.'
+                    : '내가 등록한 예약을 확인합니다. 주소를 누르면 지도가 열립니다.'
+              }
+              aside={
+                <span className="text-xs font-bold text-[#777777] bg-[#f7f7f7] border-2 border-[#e5e5e5] px-3 py-1.5 rounded-xl">
+                  실시간 연동됨
+                </span>
+              }
+            />
 
             <div className="flex gap-2 p-1.5 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl w-fit">
               {listViews.map((view) => {
@@ -261,17 +250,10 @@ export default function App() {
 
         {activeTab === '예약추가' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="inline-block bg-[#1cb0f6] text-white text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full mb-2">
-                  NEW BOOKING
-                </span>
-                <h2 className="text-3xl font-black text-[#042c60]">새로운 예약 등록</h2>
-                <p className="text-[#777777] mt-1 font-medium">
-                  필수 정보를 입력하여 새로운 예약을 간편하게 추가하세요.
-                </p>
-              </div>
-            </div>
+            <PageHeader
+              title="새로운 예약 등록"
+              description="필수 정보를 입력하여 새로운 예약을 간편하게 추가하세요."
+            />
             <BookingForm onSuccess={handleFormSuccess} />
           </div>
         )}
