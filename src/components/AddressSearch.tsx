@@ -11,15 +11,12 @@ interface AddressSearchProps {
   value: string
   onChange: (address: string) => void
   onSelect?: (result: AddressResult) => void
-  /** 드롭다운이 열리고 닫힐 때 부모에게 알린다. 지도를 잠시 숨기는 데 쓴다. */
-  onOpenChange?: (open: boolean) => void
 }
 
 export default function AddressSearch({
   value,
   onChange,
   onSelect,
-  onOpenChange,
 }: AddressSearchProps) {
   const [results, setResults] = useState<AddressResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -27,11 +24,9 @@ export default function AddressSearch({
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-
-  // 드롭다운 열림 상태를 부모에게 알린다.
-  useEffect(() => {
-    onOpenChange?.(showResults && results.length > 0)
-  }, [showResults, results.length, onOpenChange])
+  // 사용자가 직접 친 경우에만 검색한다.
+  // 수정 화면처럼 기존 주소가 처음부터 들어와 있을 때 목록이 열리는 것을 막는다.
+  const typedRef = useRef(false)
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
@@ -48,6 +43,8 @@ export default function AddressSearch({
 
   useEffect(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current)
+
+    if (!typedRef.current) return
 
     if (!value || value.length < 2) {
       setResults([])
@@ -125,6 +122,7 @@ export default function AddressSearch({
   }, [value])
 
   const handleSelect = (result: AddressResult) => {
+    typedRef.current = false
     onChange(result.display_name)
     setShowResults(false)
     setResults([])
@@ -164,8 +162,11 @@ export default function AddressSearch({
         <input
           type="text"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => value.length >= 2 && setShowResults(true)}
+          onChange={(e) => {
+            typedRef.current = true
+            onChange(e.target.value)
+          }}
+          onFocus={() => typedRef.current && value.length >= 2 && setShowResults(true)}
           onKeyDown={handleKeyDown}
           className="flex-1 px-4 py-3 outline-none font-bold text-[#3c3c3c] bg-transparent"
           placeholder="주소 입력 (예: 강남역, 천중로 42길 등)"
