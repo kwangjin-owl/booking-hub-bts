@@ -89,6 +89,23 @@ export default function CalendarView({ refreshKey = 0, isAdmin = false }: Calend
     setMapData(null)
   }
 
+  // 모달이 열려 있는 동안 Esc 로 닫고, 뒷배경 스크롤을 막는다.
+  useEffect(() => {
+    if (!selectedDateStr || editing) return
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeDay()
+    }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+    }
+  }, [selectedDateStr, editing])
+
   const handlePrevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1))
     closeDay()
@@ -398,9 +415,14 @@ export default function CalendarView({ refreshKey = 0, isAdmin = false }: Calend
         </div>
       </div>
 
-      {/* 선택한 날짜의 예약 */}
-      {selectedDateStr && (
-        <div className="bg-white p-6 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] animate-fade-in">
+      {/* 선택한 날짜의 예약.
+          예전에는 달력 아래에 붙였는데, 달력이 화면을 채워 스크롤 밖으로 밀리는 바람에
+          날짜를 눌러도 아무 일도 안 일어난 것처럼 보였다. 그래서 모달로 옮겼다. */}
+      {selectedDateStr && !editing && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40" onClick={closeDay} aria-hidden="true" />
+
+          <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-white rounded-2xl border-2 border-[#e5e5e5] shadow-[0_10px_0_#d0d0d0] p-6">
           <div className="flex justify-between items-center mb-6 gap-4">
             <h4 className="text-xl font-black text-[#042c60]">
               {selectedDateStr} · {selectedDayBookings.length}건
@@ -414,6 +436,7 @@ export default function CalendarView({ refreshKey = 0, isAdmin = false }: Calend
             </button>
           </div>
 
+          <div className="flex-1 overflow-y-auto">
           {selectedDayBookings.length === 0 ? (
             <p className="text-[#777777] font-bold text-center py-8">
               해당 날짜에 등록된 예약이 없습니다.
@@ -517,6 +540,8 @@ export default function CalendarView({ refreshKey = 0, isAdmin = false }: Calend
               )}
             </div>
           )}
+          </div>
+          </div>
         </div>
       )}
 
