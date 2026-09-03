@@ -9,60 +9,41 @@ interface Booking {
 
 interface StatCardsProps {
   refreshKey?: number
+  isAdmin?: boolean
 }
 
-export default function StatCards({ refreshKey = 0 }: StatCardsProps) {
-  const [todayCount, setTodayCount] = useState(0)
-  const [confirmRate, setConfirmRate] = useState(0)
-  const [weekCount, setWeekCount] = useState(0)
+/** 오늘 날짜를 로컬 기준 'YYYY-MM-DD' 로 만든다. toISOString 은 UTC 라 하루가 밀릴 수 있다. */
+function todayString() {
+  const d = new Date()
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
+}
+
+export default function StatCards({ refreshKey = 0, isAdmin = false }: StatCardsProps) {
+  const [upcoming, setUpcoming] = useState(0)
+  const [pending, setPending] = useState(0)
+  const [confirmed, setConfirmed] = useState(0)
 
   useEffect(() => {
     const fetchStats = async () => {
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('id, date, status')
+      // RLS 가 걸러준다. 관리자는 전체, 그 외에는 자기 예약만 돌아온다.
+      const { data, error } = await supabase.from('bookings').select('id, date, status')
 
       if (error) {
         console.error('통계 조회 실패:', error)
         return
       }
 
-      const bookings = data as Booking[]
+      const bookings = (data ?? []) as Booking[]
+      const today = todayString()
 
-      // 오늘 날짜 (YYYY-MM-DD)
-      const today = new Date().toISOString().split('T')[0]
-
-      // 1. 오늘 예약 수
-      const today_count = bookings.filter((b) => b.date === today).length
-
-      // 2. 확정률
-      const confirmed_count = bookings.filter((b) => b.status === 'confirmed').length
-      const total_count = bookings.length
-      const rate = total_count > 0 ? ((confirmed_count / total_count) * 100).toFixed(1) : '0'
-
-      // 3. 이번 주 총 건수 (월-금, 현재 날짜 기준)
-      const now = new Date()
-      const dayOfWeek = now.getDay()
-
-      // 현재 주의 월요일
-      const monday = new Date(now)
-      monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1))
-      monday.setHours(0, 0, 0, 0)
-
-      // 현재 주의 금요일
-      const friday = new Date(monday)
-      friday.setDate(monday.getDate() + 4)
-
-      const monday_str = monday.toISOString().split('T')[0]
-      const friday_str = friday.toISOString().split('T')[0]
-
-      const week_count = bookings.filter(
-        (b) => b.date >= monday_str && b.date <= friday_str
-      ).length
-
-      setTodayCount(today_count)
-      setConfirmRate(parseFloat(rate))
-      setWeekCount(week_count)
+      // '오늘 예약'은 대부분 0 이라 화면에서 쓸모가 없었다.
+      // 오늘 이후로 남은 일정을 세는 편이 실제로 궁금한 숫자에 가깝다.
+      setUpcoming(bookings.filter((b) => b.date >= today).length)
+      setPending(bookings.filter((b) => b.status === 'pending').length)
+      setConfirmed(bookings.filter((b) => b.status === 'confirmed').length)
     }
 
     fetchStats()
@@ -70,43 +51,31 @@ export default function StatCards({ refreshKey = 0 }: StatCardsProps) {
 
   const cards = [
     {
-      label: '오늘 예약',
-      value: todayCount,
-      bgColor: 'bg-white',
-      borderColor: 'border-[#e5e5e5]',
-      shadowColor: 'shadow-[0_4px_0_#e5e5e5]',
+      label: '다가오는 예약',
+      value: upcoming,
       textColor: 'text-[#042c60]',
-      badgeColor: 'bg-[#d7ffb8] text-[#58a700]',
       icon: '📅',
     },
     {
-      label: '확정률',
-      value: `${confirmRate.toFixed(1)}%`,
-      bgColor: 'bg-white',
-      borderColor: 'border-[#e5e5e5]',
-      shadowColor: 'shadow-[0_4px_0_#e5e5e5]',
-      textColor: 'text-[#58cc02]',
-      badgeColor: 'bg-[#d7ffb8] text-[#58a700]',
-      icon: '🎯',
+      label: isAdmin ? '확정 대기' : '확정 대기 중',
+      value: pending,
+      textColor: 'text-[#e6b400]',
+      icon: '⏳',
     },
     {
-      label: '이번 주 총',
-      value: weekCount,
-      bgColor: 'bg-white',
-      borderColor: 'border-[#e5e5e5]',
-      shadowColor: 'shadow-[0_4px_0_#e5e5e5]',
-      textColor: 'text-[#1cb0f6]',
-      badgeColor: 'bg-[#d7ffb8] text-[#58a700]',
-      icon: '🔥',
+      label: '확정 완료',
+      value: confirmed,
+      textColor: 'text-[#58cc02]',
+      icon: '✅',
     },
   ]
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 font-['Pretendard',sans-serif]">
-      {cards.map((card, idx) => (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-['Pretendard',sans-serif]">
+      {cards.map((card) => (
         <div
-          key={idx}
-          className={`${card.bgColor} rounded-2xl p-6 border-2 ${card.borderColor} ${card.shadowColor} flex items-center justify-between transition-all hover:-translate-y-1`}
+          key={card.label}
+          className="bg-white rounded-2xl p-6 border-2 border-[#e5e5e5] shadow-[0_4px_0_#e5e5e5] flex items-center justify-between transition-all hover:-translate-y-1"
         >
           <div>
             <span className="inline-block text-xs font-black uppercase tracking-wider text-[#777777] mb-1">

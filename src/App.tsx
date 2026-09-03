@@ -6,6 +6,7 @@ import PageHeader from './components/PageHeader'
 import BookingTable from './components/BookingTable'
 import BookingForm from './components/BookingForm'
 import StatCards from './components/StatCards'
+import WeatherCard from './components/WeatherCard'
 import CalendarView from './components/CalendarView'
 import LoginPage from './components/LoginPage'
 
@@ -197,7 +198,8 @@ export default function App() {
                   : '등록한 예약은 관리자가 확인 후 확정합니다.'
               }
             />
-            <StatCards refreshKey={refreshKey} />
+            <StatCards refreshKey={refreshKey} isAdmin={isAdmin} />
+            <WeatherCard refreshKey={refreshKey} />
           </div>
         )}
 
