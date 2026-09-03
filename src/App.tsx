@@ -268,7 +268,7 @@ export default function App() {
                   initialFilter={listFilter}
                 />
               ) : (
-                <CalendarView refreshKey={refreshKey} />
+                <CalendarView refreshKey={refreshKey} isAdmin={isAdmin} />
               )}
             </div>
           </div>
