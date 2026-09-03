@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
 import BookingTable from './components/BookingTable'
 import BookingForm from './components/BookingForm'
@@ -11,6 +12,20 @@ const ADMIN_EMAIL = 'kwangjin.owl@gmail.com'
 type TabType = '대시보드' | '예약목록' | '예약추가' | '상태관리' | '위치확인'
 type ListViewType = '목록' | '캘린더'
 
+/** 구글에서 돌아온 뒤 주소창에 남는 ?code=... / #access_token=... 을 지웁니다. */
+function cleanAuthParamsFromUrl() {
+  const { pathname, search, hash } = window.location
+  const hasAuthArtifact =
+    hash.includes('access_token') ||
+    hash.includes('error') ||
+    new URLSearchParams(search).has('code') ||
+    new URLSearchParams(search).has('error')
+
+  if (hasAuthArtifact) {
+    window.history.replaceState({}, document.title, pathname)
+  }
+}
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [userEmail, setUserEmail] = useState('')
@@ -21,38 +36,66 @@ export default function App() {
   const [listView, setListView] = useState<ListViewType>('목록')
   const [refreshKey, setRefreshKey] = useState(0)
 
+  /** 세션 하나로 로그인 상태 전체를 갱신하는 단일 진입점 */
+  const applySession = useCallback((session: Session | null) => {
+    if (session?.user?.email === ADMIN_EMAIL) {
+      setIsLoggedIn(true)
+      setUserEmail(session.user.email ?? '')
+      setUserName(session.user.user_metadata?.full_name || 'Admin')
+      setUserImage(session.user.user_metadata?.avatar_url || '')
+    } else {
+      setIsLoggedIn(false)
+      setUserEmail('')
+      setUserName('')
+      setUserImage('')
+    }
+  }, [])
+
+  /** LoginPage에서 로그인이 끝났을 때 세션을 다시 읽어 반영합니다. */
+  const handleLoginSuccess = useCallback(async () => {
+    const { data } = await supabase.auth.getSession()
+    applySession(data?.session ?? null)
+    cleanAuthParamsFromUrl()
+  }, [applySession])
+
   useEffect(() => {
-    const checkAuth = async () => {
+    let mounted = true
+
+    const init = async () => {
+      // getSession()은 URL의 OAuth 파라미터 처리가 끝난 뒤 결과를 돌려줍니다.
       const { data } = await supabase.auth.getSession()
-      if (data?.session?.user?.email === ADMIN_EMAIL) {
-        setIsLoggedIn(true)
-        setUserEmail(data.session.user.email)
-        setUserName(data.session.user.user_metadata?.full_name || 'Admin')
-        setUserImage(data.session.user.user_metadata?.avatar_url || '')
-      }
+      if (!mounted) return
+
+      applySession(data?.session ?? null)
+      cleanAuthParamsFromUrl()
       setLoading(false)
     }
 
-    checkAuth()
+    init()
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user?.email === ADMIN_EMAIL) {
-        setIsLoggedIn(true)
-        setUserEmail(session.user.email || '')
-        setUserName(session.user.user_metadata?.full_name || 'Admin')
-        setUserImage(session.user.user_metadata?.avatar_url || '')
-      } else if (event === 'SIGNED_OUT') {
-        setIsLoggedIn(false)
-        setUserEmail('')
-        setUserName('')
-        setUserImage('')
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return
+
+      if (event === 'SIGNED_OUT') {
+        applySession(null)
+        return
+      }
+
+      // SIGNED_IN, TOKEN_REFRESHED, INITIAL_SESSION 등 모두 동일하게 처리
+      applySession(session)
+
+      if (event === 'SIGNED_IN') {
+        cleanAuthParamsFromUrl()
       }
     })
 
-    return () => subscription.unsubscribe()
-  }, [])
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
+  }, [applySession])
 
   const handleFormSuccess = () => {
     setRefreshKey((prev) => prev + 1)
@@ -60,25 +103,24 @@ export default function App() {
     setActiveTab('예약목록')
   }
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    applySession(null)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-gray-600">로딩 중...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-[#58cc02] mb-4"></div>
+          <p className="text-[#777777] font-bold">로딩 중...</p>
         </div>
       </div>
     )
   }
 
   if (!isLoggedIn) {
-    return <LoginPage onLoginSuccess={() => setIsLoggedIn(true)} />
-  }
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    setIsLoggedIn(false)
-    setUserEmail('')
+    return <LoginPage onLoginSuccess={handleLoginSuccess} />
   }
 
   const tabs: { id: TabType; label: string }[] = [
@@ -113,6 +155,7 @@ export default function App() {
                     src={userImage}
                     alt="profile"
                     className="w-9 h-9 rounded-full object-cover"
+                    referrerPolicy="no-referrer"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none'
                     }}

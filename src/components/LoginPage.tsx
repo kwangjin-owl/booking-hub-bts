@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
 const ADMIN_EMAIL = 'kwangjin.owl@gmail.com'
@@ -11,16 +11,44 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // StrictMode에서 effect가 두 번 실행되어 signOut이 중복 호출되는 것을 막습니다.
+  const handledRef = useRef(false)
+
   useEffect(() => {
-    // 로그인 콜백 처리
     const handleAuthCallback = async () => {
-      const { data } = await supabase.auth.getSession()
+      if (handledRef.current) return
+
+      // OAuth 진행 중에 뜬 에러(동의 거부 등)를 URL에서 읽어 표시합니다.
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+      const queryParams = new URLSearchParams(window.location.search)
+      const oauthError =
+        hashParams.get('error_description') ||
+        hashParams.get('error') ||
+        queryParams.get('error_description') ||
+        queryParams.get('error')
+
+      if (oauthError) {
+        handledRef.current = true
+        setError(`로그인 실패: ${decodeURIComponent(oauthError)}`)
+        window.history.replaceState({}, document.title, window.location.pathname)
+        return
+      }
+
+      const { data, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError) {
+        setError('세션 확인 실패: ' + sessionError.message)
+        return
+      }
+
       if (data?.session) {
+        handledRef.current = true
         const userEmail = data.session.user.email
+
         if (userEmail === ADMIN_EMAIL) {
           onLoginSuccess()
         } else {
-          setError(`접근 거부: ${userEmail}은 허가되지 않은 이메일입니다.`)
+          setError(`접근 거부: ${userEmail} 은(는) 허가되지 않은 이메일입니다.`)
           await supabase.auth.signOut()
         }
       }
@@ -33,15 +61,20 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        // 이 앱에는 라우터가 없습니다. /auth/callback 같은 하위 경로로 돌아오면
+        // 서버에 해당 파일이 없어 404가 납니다. 항상 루트로 돌아오게 합니다.
+        redirectTo: window.location.origin,
+        queryParams: {
+          prompt: 'select_account',
+        },
       },
     })
 
-    if (error) {
-      setError('로그인 실패: ' + error.message)
+    if (oauthError) {
+      setError('로그인 실패: ' + oauthError.message)
       setLoading(false)
     }
   }
@@ -85,12 +118,12 @@ export default function LoginPage({ onLoginSuccess }: LoginPageProps) {
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
             <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
           </svg>
-          Google로 로그인
+          {loading ? '이동 중...' : 'Google로 로그인'}
         </button>
 
         <div className="mt-6 pt-6 border-t-2 border-[#e5e5e5]">
           <p className="text-xs text-[#777777] text-center font-bold">
-            kwangjin.owl@gmail.com 계정으로만 접속 가능합니다.
+            {ADMIN_EMAIL} 계정으로만 접속 가능합니다.
           </p>
         </div>
       </div>
