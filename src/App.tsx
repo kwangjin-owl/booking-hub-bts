@@ -1,22 +1,57 @@
 import { useEffect, useState } from 'react'
+import { supabase } from './supabaseClient'
 import BookingTable from './components/BookingTable'
 import BookingForm from './components/BookingForm'
 import StatCards from './components/StatCards'
 import CalendarView from './components/CalendarView'
+import LoginPage from './components/LoginPage'
+
+const ADMIN_EMAIL = 'kwangjin.owl@gmail.com'
 
 type TabType = '대시보드' | '예약목록' | '예약추가' | '상태관리' | '위치확인'
 type ListViewType = '목록' | '캘린더'
 
 export default function App() {
-  const [userEmail] = useState('admin@booking-hub.com')
-  const [userName] = useState('관리자')
-  const [userImage] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [userEmail, setUserEmail] = useState('')
+  const [userName, setUserName] = useState('')
+  const [userImage, setUserImage] = useState('')
+  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('대시보드')
   const [listView, setListView] = useState<ListViewType>('목록')
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
-    // 로그인 체크 비활성화 (Supabase 인증 설정 완료 후 재활성화)
+    const checkAuth = async () => {
+      const { data } = await supabase.auth.getSession()
+      if (data?.session?.user?.email === ADMIN_EMAIL) {
+        setIsLoggedIn(true)
+        setUserEmail(data.session.user.email)
+        setUserName(data.session.user.user_metadata?.full_name || 'Admin')
+        setUserImage(data.session.user.user_metadata?.avatar_url || '')
+      }
+      setLoading(false)
+    }
+
+    checkAuth()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user?.email === ADMIN_EMAIL) {
+        setIsLoggedIn(true)
+        setUserEmail(session.user.email || '')
+        setUserName(session.user.user_metadata?.full_name || 'Admin')
+        setUserImage(session.user.user_metadata?.avatar_url || '')
+      } else if (event === 'SIGNED_OUT') {
+        setIsLoggedIn(false)
+        setUserEmail('')
+        setUserName('')
+        setUserImage('')
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
   const handleFormSuccess = () => {
@@ -25,21 +60,26 @@ export default function App() {
     setActiveTab('예약목록')
   }
 
-  // 로그인 체크 임시 비활성화 (Supabase 인증 설정 완료 후 재활성화)
-  // if (loading) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center">
-  //       <div className="text-center">
-  //         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-  //         <p className="text-gray-600">로딩 중...</p>
-  //       </div>
-  //     </div>
-  //   )
-  // }
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+          <p className="text-gray-600">로딩 중...</p>
+        </div>
+      </div>
+    )
+  }
 
-  // if (!isLoggedIn) {
-  //   return <LoginPage onLoginSuccess={() => setIsLoggedIn(true)} />
-  // }
+  if (!isLoggedIn) {
+    return <LoginPage onLoginSuccess={() => setIsLoggedIn(true)} />
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    setIsLoggedIn(false)
+    setUserEmail('')
+  }
 
   const tabs: { id: TabType; label: string }[] = [
     { id: '대시보드', label: '대시보드' },
@@ -92,10 +132,10 @@ export default function App() {
               </div>
             </div>
             <button
-              onClick={() => window.location.reload()}
+              onClick={handleLogout}
               className="bg-white text-[#ff4b4b] border-2 border-[#e5e5e5] hover:border-[#ff4b4b] px-4 py-2 text-xs font-black uppercase rounded-2xl transition-all shadow-[0_3px_0_#e5e5e5] active:translate-y-[3px] active:shadow-none cursor-pointer"
             >
-              새로고침
+              로그아웃
             </button>
           </div>
         </div>
