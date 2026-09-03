@@ -2,23 +2,33 @@ import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import AddressSearch from './AddressSearch'
+import { formatKoreanAddress } from '../lib/address'
 
 interface AddressResult {
   address: string
   lat: number
   lon: number
   display_name: string
+  korean: string
 }
 
 interface LocationPickerProps {
   value: string
   onChange: (address: string) => void
+  /** 동·호수·층처럼 지도가 모르는 부분. 검색 결과에는 절대 안 나온다. */
+  detail?: string
+  onDetailChange?: (detail: string) => void
 }
 
 /** 좌표를 모를 때 처음 보여줄 위치 (서울시청) */
 const DEFAULT_CENTER: [number, number] = [37.5665, 126.978]
 
-export default function LocationPicker({ value, onChange }: LocationPickerProps) {
+export default function LocationPicker({
+  value,
+  onChange,
+  detail,
+  onDetailChange,
+}: LocationPickerProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -37,14 +47,16 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
       url.searchParams.append('lon', String(lon))
       url.searchParams.append('format', 'json')
       url.searchParams.append('accept-language', 'ko')
+      url.searchParams.append('addressdetails', '1')
 
       const res = await fetch(url.toString())
       const data = await res.json()
 
       if (data?.display_name) {
-        setPreview(data.display_name)
+        const korean = formatKoreanAddress(data.address, data.display_name)
+        setPreview(korean)
         // 지도를 움직인 그 자리가 곧 선택한 주소가 된다. 따로 버튼을 누를 필요가 없다.
-        onChange(data.display_name)
+        onChange(korean)
       } else {
         setPreview('이 위치의 주소를 찾지 못했습니다')
       }
@@ -99,8 +111,9 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
 
   /** 검색 결과를 고르면 지도를 그 위치로 옮긴다. */
   const handleSelect = (result: AddressResult) => {
-    onChange(result.display_name)
-    setPreview(result.display_name)
+    const korean = result.korean || result.display_name
+    onChange(korean)
+    setPreview(korean)
     skipNextMoveRef.current = true
     mapInstanceRef.current?.setView([result.lat, result.lon], 16)
   }
@@ -136,6 +149,17 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
           </div>
         </div>
       </div>
+
+      {/* 지도는 건물까지만 안다. 층·호수는 직접 적어야 한다. */}
+      {onDetailChange && (
+        <input
+          type="text"
+          value={detail ?? ''}
+          onChange={(e) => onDetailChange(e.target.value)}
+          placeholder="상세주소 (예: 5층 회의실 A, 302호)"
+          className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
+        />
+      )}
 
       <p className="text-[11px] text-[#777777] font-bold">
         주소를 검색하거나, 지도를 끌어 핀을 맞추면 그 위치가 주소로 저장됩니다.

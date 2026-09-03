@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
+import { formatKoreanAddress, type NominatimAddress } from '../lib/address'
 
 interface AddressResult {
   address: string
   lat: number
   lon: number
   display_name: string
+  /** 한국식 순서로 다시 만든 주소. 저장·표시에는 이 값을 쓴다. */
+  korean: string
 }
 
 interface AddressSearchProps {
@@ -71,6 +74,7 @@ export default function AddressSearch({
         searchUrl.searchParams.append('countrycodes', 'kr')
         searchUrl.searchParams.append('accept-language', 'ko')
         searchUrl.searchParams.append('viewbox', '124.5,33.0,131.9,43.0') // 한반도 범위
+        searchUrl.searchParams.append('addressdetails', '1') // 시·구·도로명을 따로 받아온다
 
         const response = await fetch(searchUrl.toString())
         let data = await response.json()
@@ -84,6 +88,7 @@ export default function AddressSearch({
           retryUrl.searchParams.append('countrycodes', 'kr')
           retryUrl.searchParams.append('accept-language', 'ko')
           retryUrl.searchParams.append('viewbox', '124.5,33.0,131.9,43.0')
+          retryUrl.searchParams.append('addressdetails', '1')
           
           const retryResponse = await fetch(retryUrl.toString())
           const retryData = await retryResponse.json()
@@ -102,6 +107,7 @@ export default function AddressSearch({
             lat: parseFloat(item.lat),
             lon: parseFloat(item.lon),
             display_name: item.display_name,
+            korean: formatKoreanAddress(item.address as NominatimAddress, item.display_name),
           }))
 
         console.log('포맷된 결과:', formatted) // 디버깅
@@ -123,7 +129,7 @@ export default function AddressSearch({
 
   const handleSelect = (result: AddressResult) => {
     typedRef.current = false
-    onChange(result.display_name)
+    onChange(result.korean || result.display_name)
     setShowResults(false)
     setResults([])
     onSelect?.(result)
@@ -214,8 +220,8 @@ export default function AddressSearch({
                     )}
                     {result.display_name.split(',')[0]}
                   </p>
-                  <p className="text-xs text-[#777777] truncate mt-0.5 font-medium">
-                    {result.display_name}
+                  <p className="text-xs text-[#777777] mt-0.5 font-medium">
+                    {result.korean || result.display_name}
                   </p>
                 </button>
               ))}

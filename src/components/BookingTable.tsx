@@ -12,6 +12,7 @@ interface Booking {
   time: string
   status: string
   address?: string | null
+  detail_address?: string | null
   calendar_event_id?: string | null
   created_at?: string
 }
@@ -57,7 +58,9 @@ export default function BookingTable({
       // RLS 가 알아서 걸러준다. 관리자는 전체, 그 외에는 자기 것만 돌아온다.
       const { data, error } = await supabase
         .from('bookings')
-        .select('id, customer, service, date, time, status, address, calendar_event_id, created_at')
+        .select(
+          'id, customer, service, date, time, status, address, detail_address, calendar_event_id, created_at',
+        )
 
       if (error) {
         console.error('조회 실패:', error.message, error.code, error.details)
@@ -79,7 +82,7 @@ export default function BookingTable({
       if (statusFilter !== 'all' && b.status !== statusFilter) return false
       if (!q) return true
 
-      return [b.customer, b.service, b.address ?? '', b.date]
+      return [b.customer, b.service, b.address ?? '', b.detail_address ?? '', b.date]
         .join(' ')
         .toLowerCase()
         .includes(q)
@@ -122,7 +125,7 @@ export default function BookingTable({
         service: booking.service,
         date: booking.date,
         time: booking.time,
-        address: booking.address,
+        address: [booking.address, booking.detail_address].filter(Boolean).join(' '),
       })
 
       if (!result.ok) {
@@ -180,6 +183,7 @@ export default function BookingTable({
         date: draft.date,
         time: draft.time,
         address: draft.address || null,
+        detail_address: draft.detailAddress || null,
       })
       .eq('id', booking.id)
 
@@ -193,7 +197,13 @@ export default function BookingTable({
     let eventId = booking.calendar_event_id ?? null
     if (booking.status === 'confirmed') {
       if (eventId) await removeBookingFromCalendar(eventId)
-      const result = await addBookingToCalendar({ ...draft })
+      const result = await addBookingToCalendar({
+        customer: draft.customer,
+        service: draft.service,
+        date: draft.date,
+        time: draft.time,
+        address: [draft.address, draft.detailAddress].filter(Boolean).join(' '),
+      })
       eventId = result.ok ? (result.eventId ?? null) : null
       await supabase.from('bookings').update({ calendar_event_id: eventId }).eq('id', booking.id)
     }
@@ -201,7 +211,16 @@ export default function BookingTable({
     setBookings((prev) =>
       prev.map((b) =>
         b.id === booking.id
-          ? { ...b, ...draft, address: draft.address || null, calendar_event_id: eventId }
+          ? {
+              ...b,
+              customer: draft.customer,
+              service: draft.service,
+              date: draft.date,
+              time: draft.time,
+              address: draft.address || null,
+              detail_address: draft.detailAddress || null,
+              calendar_event_id: eventId,
+            }
           : b,
       ),
     )
@@ -366,11 +385,11 @@ export default function BookingTable({
             <table className="w-full border-collapse table-fixed min-w-[900px]">
               {/* 컬럼 폭을 고정해 헤더와 본문 정렬을 맞춘다 */}
               <colgroup>
-                <col className="w-[16%]" />
-                <col className="w-[13%]" />
+                <col className="w-[14%]" />
+                <col className="w-[11%]" />
                 <col className="w-[12%]" />
-                <col className="w-[9%]" />
-                <col className="w-[26%]" />
+                <col className="w-[8%]" />
+                <col className="w-[31%]" />
                 <col className="w-[12%]" />
                 {isAdmin && <col className="w-[12%]" />}
               </colgroup>
@@ -425,9 +444,16 @@ export default function BookingTable({
                           <button
                             onClick={() => handleShowMap(booking)}
                             title={booking.address}
-                            className="text-left text-[#1cb0f6] font-bold underline hover:text-[#0d99dc] cursor-pointer line-clamp-2 leading-snug"
+                            className="text-left cursor-pointer group"
                           >
-                            {booking.address}
+                            <span className="text-[#1cb0f6] font-bold underline group-hover:text-[#0d99dc] leading-snug">
+                              {booking.address}
+                            </span>
+                            {booking.detail_address && (
+                              <span className="block text-[11px] text-[#777777] font-bold mt-0.5">
+                                {booking.detail_address}
+                              </span>
+                            )}
                           </button>
                         ) : (
                           <span className="text-[#afafaf]">-</span>

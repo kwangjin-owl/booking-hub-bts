@@ -9,6 +9,7 @@ export interface EditableBooking {
   date: string
   time: string
   address?: string | null
+  detail_address?: string | null
   status: string
 }
 
@@ -18,6 +19,7 @@ export interface EditDraft {
   date: string
   time: string
   address: string
+  detailAddress: string
 }
 
 interface BookingEditModalProps {
@@ -39,6 +41,7 @@ export default function BookingEditModal({
     date: booking.date,
     time: booking.time,
     address: booking.address ?? '',
+    detailAddress: booking.detail_address ?? '',
   }
 
   const [draft, setDraft] = useState<EditDraft>(initial)
@@ -165,6 +168,8 @@ export default function BookingEditModal({
               <LocationPicker
                 value={draft.address}
                 onChange={(address) => setDraft({ ...draft, address })}
+                detail={draft.detailAddress}
+                onDetailChange={(detailAddress) => setDraft({ ...draft, detailAddress })}
               />
             </div>
           </div>

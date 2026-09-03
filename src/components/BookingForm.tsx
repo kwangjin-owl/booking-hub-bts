@@ -14,6 +14,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [address, setAddress] = useState('')
+  const [detailAddress, setDetailAddress] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -45,6 +46,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       date,
       time,
       address: address || null,
+      detail_address: detailAddress || null,
       status: 'pending',
       via: 'form',
       user_id: userId,
@@ -69,6 +71,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     setDate('')
     setTime('')
     setAddress('')
+    setDetailAddress('')
     setLoading(false)
     onSuccess?.(inserted?.id)
   }
@@ -121,7 +124,12 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
 
         <div className="md:col-span-2">
           <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">주소</label>
-          <LocationPicker value={address} onChange={setAddress} />
+          <LocationPicker
+            value={address}
+            onChange={setAddress}
+            detail={detailAddress}
+            onDetailChange={setDetailAddress}
+          />
         </div>
       </div>
 
