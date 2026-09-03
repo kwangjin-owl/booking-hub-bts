@@ -1,9 +1,31 @@
-// Vercel 서버리스 함수. 브라우저가 아니라 서버에서 돌기 때문에
-// GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN 을 안전하게 쓸 수 있다.
+// Vercel 서버리스 함수.
+// 브라우저가 아니라 서버에서 돌기 때문에 CLIENT_SECRET / REFRESH_TOKEN 을 안전하게 쓴다.
 //
-// 로컬에서는 `vercel dev` 로만 동작한다. `npm run dev`(vite) 로는 이 경로가 안 뜬다.
+// 중요: 이 경로는 인터넷에 열려 있다. 토큰을 확인하지 않으면
+// 누구나 관리자 캘린더에 일정을 만들 수 있으므로 반드시 관리자인지 검사한다.
+//
+// 로컬에서는 `vercel dev` 로만 동작한다. `npm run dev`(vite) 로는 안 뜬다.
 
 const TIME_ZONE = 'Asia/Seoul'
+const ADMIN_EMAILS = ['kwangjin.owl@gmail.com']
+
+/** Supabase 에 access token 을 물어 로그인한 사람이 누구인지 확인한다. */
+async function getUser(req) {
+  const auth = req.headers.authorization ?? ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null
+  if (!token) return null
+
+  const supabaseUrl = process.env.VITE_SUPABASE_URL
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY
+  if (!supabaseUrl || !anonKey) return null
+
+  const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: { Authorization: `Bearer ${token}`, apikey: anonKey },
+  })
+  if (!res.ok) return null
+
+  return res.json()
+}
 
 /** refresh token 으로 1시간짜리 access token 을 받아온다. */
 async function getAccessToken() {
@@ -25,7 +47,7 @@ async function getAccessToken() {
   return json.access_token
 }
 
-/** 'HH:MM' 에 duration 분을 더해 'HH:MM' 으로 돌려준다. */
+/** 'HH:MM' 에 분을 더해 'HH:MM' 으로 돌려준다. */
 function addMinutes(time, minutes) {
   const [h, m] = time.split(':').map(Number)
   const total = h * 60 + m + minutes
@@ -39,7 +61,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'POST 만 받습니다' })
   }
 
-  // 환경변수가 하나라도 비면 원인을 바로 알려준다.
   const missing = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN'].filter(
     (k) => !process.env[k],
   )
@@ -47,14 +68,43 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: `환경변수 누락: ${missing.join(', ')}` })
   }
 
-  try {
-    const { customer, service, date, time, address } = req.body ?? {}
+  // 관리자 확인. 화면에서 버튼을 숨기는 것만으로는 막을 수 없다.
+  const user = await getUser(req)
+  if (!user) {
+    return res.status(401).json({ error: '로그인이 필요합니다' })
+  }
+  if (!ADMIN_EMAILS.includes((user.email ?? '').toLowerCase())) {
+    return res.status(403).json({ error: '관리자만 캘린더를 바꿀 수 있습니다' })
+  }
 
+  try {
+    const { action, booking, eventId } = req.body ?? {}
+    const accessToken = await getAccessToken()
+
+    // ---------- 일정 삭제 ----------
+    if (action === 'delete') {
+      if (!eventId) {
+        return res.status(400).json({ error: 'eventId 가 필요합니다' })
+      }
+
+      const delRes = await fetch(
+        `https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`,
+        { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } },
+      )
+
+      // 410 은 이미 지워진 일정이다. 성공으로 본다.
+      if (!delRes.ok && delRes.status !== 404 && delRes.status !== 410) {
+        return res.status(delRes.status).json({ error: `캘린더 삭제 실패: HTTP ${delRes.status}` })
+      }
+
+      return res.status(200).json({ ok: true })
+    }
+
+    // ---------- 일정 생성 ----------
+    const { customer, service, date, time, address } = booking ?? {}
     if (!customer || !service || !date || !time) {
       return res.status(400).json({ error: 'customer, service, date, time 은 필수입니다' })
     }
-
-    const accessToken = await getAccessToken()
 
     const event = {
       summary: `${customer} - ${service}`,
@@ -63,18 +113,15 @@ export default async function handler(req, res) {
         `서비스: ${service}`,
         address ? `주소: ${address}` : null,
         '',
-        '예약 관리 허브에서 자동 등록됨',
+        '예약 관리 허브에서 확정됨',
       ]
         .filter(Boolean)
         .join('\n'),
       start: { dateTime: `${date}T${time}:00`, timeZone: TIME_ZONE },
-      // 기본 1시간짜리로 잡는다. 길이를 바꾸려면 60 을 고친다.
+      // 기본 1시간. 길이를 바꾸려면 60 을 고친다.
       end: { dateTime: `${date}T${addMinutes(time, 60)}:00`, timeZone: TIME_ZONE },
     }
-
-    if (address) {
-      event.location = address
-    }
+    if (address) event.location = address
 
     const calRes = await fetch(
       'https://www.googleapis.com/calendar/v3/calendars/primary/events',
@@ -89,17 +136,12 @@ export default async function handler(req, res) {
     )
 
     const calJson = await calRes.json()
-
     if (!calRes.ok) {
       const message = calJson.error?.message ?? `HTTP ${calRes.status}`
       return res.status(calRes.status).json({ error: `캘린더 등록 실패: ${message}` })
     }
 
-    return res.status(200).json({
-      ok: true,
-      eventId: calJson.id,
-      htmlLink: calJson.htmlLink,
-    })
+    return res.status(200).json({ ok: true, eventId: calJson.id, htmlLink: calJson.htmlLink })
   } catch (err) {
     console.error('[api/calendar]', err)
     return res.status(500).json({ error: err.message ?? '알 수 없는 오류' })

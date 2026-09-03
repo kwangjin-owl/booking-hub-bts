@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import AddressSearch from './AddressSearch'
 import MapView from './MapView'
-import { addBookingToCalendar } from '../lib/calendar'
 
 interface BookingFormProps {
   onSuccess?: () => void
@@ -23,13 +22,11 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
   const [address, setAddress] = useState('')
   const [selectedLocation, setSelectedLocation] = useState<AddressResult | null>(null)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    setNotice('')
 
     // 필수 칸 검증
     if (!customer || !service || !date || !time) {
@@ -38,6 +35,18 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     }
 
     setLoading(true)
+
+    // RLS 의 insert 정책이 user_id = auth.uid() 를 요구한다.
+    // 로그인한 본인 id 를 반드시 같이 넣어야 저장된다.
+    const { data: sessionData } = await supabase.auth.getSession()
+    const userId = sessionData?.session?.user?.id
+
+    if (!userId) {
+      setError('로그인이 만료됐습니다. 다시 로그인해 주세요.')
+      setLoading(false)
+      return
+    }
+
     const { error: insertError } = await supabase.from('bookings').insert({
       customer,
       service,
@@ -46,6 +55,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       address: address || null,
       status: 'pending',
       via: 'form',
+      user_id: userId,
     })
 
     if (insertError) {
@@ -57,22 +67,6 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       setError(`예약 추가 실패: ${insertError.message}`)
       setLoading(false)
       return
-    }
-
-    // 예약은 저장됐다. 이어서 구글 캘린더에 일정을 만든다.
-    // 캘린더가 실패해도 예약을 되돌리지는 않는다 - 안내만 띄운다.
-    const calendar = await addBookingToCalendar({
-      customer,
-      service,
-      date,
-      time,
-      address: address || null,
-    })
-
-    if (calendar.ok) {
-      setNotice('예약이 저장되고 구글 캘린더에도 등록됐습니다.')
-    } else {
-      setNotice(`예약은 저장됐지만 캘린더 등록에 실패했습니다: ${calendar.error}`)
     }
 
     // 성공
@@ -101,12 +95,6 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       {error && (
         <div className="mb-6 p-4 bg-[#ff4b4b]/10 border-2 border-[#ff4b4b] rounded-2xl text-[#ff4b4b] text-xs font-black">
           {error}
-        </div>
-      )}
-
-      {notice && (
-        <div className="mb-6 p-4 bg-[#d7ffb8]/40 border-2 border-[#a5ed6e] rounded-2xl text-[#58a700] text-xs font-black">
-          {notice}
         </div>
       )}
 

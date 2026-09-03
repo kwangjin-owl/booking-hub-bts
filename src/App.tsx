@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabaseClient'
+import { isAdminEmail } from './lib/auth'
 import BookingTable from './components/BookingTable'
 import BookingForm from './components/BookingForm'
 import StatCards from './components/StatCards'
 import CalendarView from './components/CalendarView'
 import LoginPage from './components/LoginPage'
 
-const ADMIN_EMAIL = 'kwangjin.owl@gmail.com'
-
 type TabType = '대시보드' | '예약목록' | '예약추가' | '상태관리' | '위치확인'
 type ListViewType = '목록' | '캘린더'
 
-/** 구글에서 돌아온 뒤 주소창에 남는 ?code=... / #access_token=... 을 지웁니다. */
+/** 구글에서 돌아온 뒤 주소창에 남는 ?code=... / #access_token=... 을 지운다. */
 function cleanAuthParamsFromUrl() {
   const { pathname, search, hash } = window.location
   const hasAuthArtifact =
@@ -28,6 +27,7 @@ function cleanAuthParamsFromUrl() {
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [userEmail, setUserEmail] = useState('')
   const [userName, setUserName] = useState('')
   const [userImage, setUserImage] = useState('')
@@ -38,20 +38,22 @@ export default function App() {
 
   /** 세션 하나로 로그인 상태 전체를 갱신하는 단일 진입점 */
   const applySession = useCallback((session: Session | null) => {
-    if (session?.user?.email === ADMIN_EMAIL) {
+    if (session?.user) {
+      const email = session.user.email ?? ''
       setIsLoggedIn(true)
-      setUserEmail(session.user.email ?? '')
-      setUserName(session.user.user_metadata?.full_name || 'Admin')
+      setIsAdmin(isAdminEmail(email))
+      setUserEmail(email)
+      setUserName(session.user.user_metadata?.full_name || '사용자')
       setUserImage(session.user.user_metadata?.avatar_url || '')
     } else {
       setIsLoggedIn(false)
+      setIsAdmin(false)
       setUserEmail('')
       setUserName('')
       setUserImage('')
     }
   }, [])
 
-  /** LoginPage에서 로그인이 끝났을 때 세션을 다시 읽어 반영합니다. */
   const handleLoginSuccess = useCallback(async () => {
     const { data } = await supabase.auth.getSession()
     applySession(data?.session ?? null)
@@ -62,10 +64,8 @@ export default function App() {
     let mounted = true
 
     const init = async () => {
-      // getSession()은 URL의 OAuth 파라미터 처리가 끝난 뒤 결과를 돌려줍니다.
       const { data } = await supabase.auth.getSession()
       if (!mounted) return
-
       applySession(data?.session ?? null)
       cleanAuthParamsFromUrl()
       setLoading(false)
@@ -83,12 +83,8 @@ export default function App() {
         return
       }
 
-      // SIGNED_IN, TOKEN_REFRESHED, INITIAL_SESSION 등 모두 동일하게 처리
       applySession(session)
-
-      if (event === 'SIGNED_IN') {
-        cleanAuthParamsFromUrl()
-      }
+      if (event === 'SIGNED_IN') cleanAuthParamsFromUrl()
     })
 
     return () => {
@@ -123,12 +119,17 @@ export default function App() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />
   }
 
+  // 상태관리·위치확인은 전체 예약을 다루는 화면이라 관리자에게만 보인다.
   const tabs: { id: TabType; label: string }[] = [
     { id: '대시보드', label: '대시보드' },
-    { id: '예약목록', label: '예약목록' },
+    { id: '예약목록', label: isAdmin ? '예약목록' : '내 예약' },
     { id: '예약추가', label: '예약추가' },
-    { id: '상태관리', label: '상태관리' },
-    { id: '위치확인', label: '위치확인' },
+    ...(isAdmin
+      ? ([
+          { id: '상태관리', label: '상태관리' },
+          { id: '위치확인', label: '위치확인' },
+        ] as { id: TabType; label: string }[])
+      : []),
   ]
 
   const listViews: { id: ListViewType; label: string }[] = [
@@ -138,7 +139,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-white text-[#3c3c3c] pb-24 font-['Pretendard',sans-serif]">
-      {/* 듀오링고 스타일 탑 내비게이션 바 */}
+      {/* 탑 내비게이션 바 */}
       <div className="bg-white border-b-2 border-[#e5e5e5] sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-6 h-[70px] flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -161,14 +162,18 @@ export default function App() {
                     }}
                   />
                 ) : (
-                  <span>{userName?.charAt(0).toUpperCase() || 'A'}</span>
+                  <span>{userName?.charAt(0).toUpperCase() || 'U'}</span>
                 )}
               </div>
               <div className="hidden sm:block">
                 <div className="flex items-center gap-1.5">
                   <p className="text-xs font-bold text-[#3c3c3c]">{userName}</p>
-                  <span className="px-2 py-0.5 bg-[#d7ffb8] text-[#58a700] text-[10px] font-black uppercase rounded-full">
-                    관리자
+                  <span
+                    className={`px-2 py-0.5 text-[10px] font-black uppercase rounded-full ${
+                      isAdmin ? 'bg-[#d7ffb8] text-[#58a700]' : 'bg-[#e5f4ff] text-[#1cb0f6]'
+                    }`}
+                  >
+                    {isAdmin ? '관리자' : '사용자'}
                   </span>
                 </div>
                 <p className="text-[11px] text-[#777777]">{userEmail}</p>
@@ -184,36 +189,44 @@ export default function App() {
         </div>
       </div>
 
-      {/* 본문 영역 */}
+      {/* 본문 */}
       <div className="max-w-6xl mx-auto p-6 md:p-8">
-        {/* 대시보드 탭 */}
         {activeTab === '대시보드' && (
           <div className="space-y-6">
             <div className="bg-[#d7ffb8]/30 border-2 border-[#a5ed6e] p-6 rounded-2xl flex items-center justify-between">
               <div>
                 <span className="inline-block bg-[#58cc02] text-white text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full mb-2">
-                  FREE. FUN. EFFECTIVE.
+                  {isAdmin ? 'ADMIN DASHBOARD' : 'MY BOOKINGS'}
                 </span>
-                <h2 className="text-3xl font-black text-[#042c60]">오늘의 예약 현황을 한눈에 확인하세요!</h2>
-                <p className="text-[#777777] mt-1 font-medium">듀오링고 스타일로 새롭게 단장된 프리미엄 예약 관리 허브입니다.</p>
+                <h2 className="text-3xl font-black text-[#042c60]">
+                  {isAdmin
+                    ? '오늘의 예약 현황을 한눈에 확인하세요!'
+                    : '내 예약 현황을 확인하세요!'}
+                </h2>
+                <p className="text-[#777777] mt-1 font-medium">
+                  {isAdmin
+                    ? '전체 예약을 관리하고 확정할 수 있습니다.'
+                    : '등록한 예약은 관리자가 확인 후 확정합니다.'}
+                </p>
               </div>
-              <div className="hidden md:block text-5xl">
-                🚀
-              </div>
+              <div className="hidden md:block text-5xl">🚀</div>
             </div>
             <StatCards refreshKey={refreshKey} />
           </div>
         )}
 
-        {/* 예약목록 탭 - 목록 / 캘린더 보기 전환 */}
         {activeTab === '예약목록' && (
           <div className="space-y-6">
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
-                <h2 className="text-3xl font-black text-[#042c60]">예약 목록</h2>
+                <h2 className="text-3xl font-black text-[#042c60]">
+                  {isAdmin ? '예약 목록' : '내 예약'}
+                </h2>
                 <p className="text-[#777777] mt-1 font-medium">
                   {listView === '목록'
-                    ? '등록된 모든 예약을 표 형태로 확인합니다.'
+                    ? isAdmin
+                      ? '등록된 모든 예약을 표 형태로 확인합니다.'
+                      : '내가 등록한 예약을 표 형태로 확인합니다.'
                     : '월별 예약 일정을 캘린더 형태로 조망합니다.'}
                 </p>
               </div>
@@ -222,7 +235,6 @@ export default function App() {
               </span>
             </div>
 
-            {/* 보기 전환 버튼 */}
             <div className="flex gap-2 p-1.5 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl w-fit">
               {listViews.map((view) => {
                 const isActive = listView === view.id
@@ -242,10 +254,9 @@ export default function App() {
               })}
             </div>
 
-            {/* 화면 흔들림 방지를 위해 최소 높이를 고정합니다 */}
             <div className="min-h-[720px]">
               {listView === '목록' ? (
-                <BookingTable refreshKey={refreshKey} />
+                <BookingTable refreshKey={refreshKey} isAdmin={isAdmin} />
               ) : (
                 <CalendarView refreshKey={refreshKey} />
               )}
@@ -253,7 +264,6 @@ export default function App() {
           </div>
         )}
 
-        {/* 예약추가 탭 */}
         {activeTab === '예약추가' && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -262,37 +272,42 @@ export default function App() {
                   NEW BOOKING
                 </span>
                 <h2 className="text-3xl font-black text-[#042c60]">새로운 예약 등록</h2>
-                <p className="text-[#777777] mt-1 font-medium">필수 정보를 입력하여 새로운 예약을 간편하게 추가하세요.</p>
+                <p className="text-[#777777] mt-1 font-medium">
+                  필수 정보를 입력하여 새로운 예약을 간편하게 추가하세요.
+                </p>
               </div>
             </div>
             <BookingForm onSuccess={handleFormSuccess} />
           </div>
         )}
 
-        {/* 상태관리 탭 */}
-        {activeTab === '상태관리' && (
+        {isAdmin && activeTab === '상태관리' && (
           <div className="space-y-6">
             <div className="bg-[#f7f7f7] border-2 border-[#e5e5e5] p-6 rounded-2xl">
               <h2 className="text-3xl font-black text-[#042c60] mb-2">상태 관리</h2>
-              <p className="text-[#777777] font-medium">예약의 상태를 대기(Pending)와 확정(Confirmed) 간에 간편하게 전환할 수 있습니다. 배지를 클릭해 보세요!</p>
+              <p className="text-[#777777] font-medium">
+                대기 중인 예약을 확정하면 구글 캘린더에 일정이 자동으로 등록됩니다. 확정을 되돌리면
+                일정도 함께 삭제됩니다.
+              </p>
             </div>
-            <BookingTable refreshKey={refreshKey} />
+            <BookingTable refreshKey={refreshKey} isAdmin={isAdmin} />
           </div>
         )}
 
-        {/* 위치확인 탭 */}
-        {activeTab === '위치확인' && (
+        {isAdmin && activeTab === '위치확인' && (
           <div className="space-y-6">
             <div className="bg-[#f7f7f7] border-2 border-[#e5e5e5] p-6 rounded-2xl">
               <h2 className="text-3xl font-black text-[#042c60] mb-2">위치 확인</h2>
-              <p className="text-[#777777] font-medium">등록된 주소 링크를 클릭하여 OpenStreetMap 지도를 통해 위치를 시각적으로 확인하세요.</p>
+              <p className="text-[#777777] font-medium">
+                등록된 주소 링크를 클릭하여 OpenStreetMap 지도를 통해 위치를 시각적으로 확인하세요.
+              </p>
             </div>
-            <BookingTable refreshKey={refreshKey} />
+            <BookingTable refreshKey={refreshKey} isAdmin={isAdmin} />
           </div>
         )}
       </div>
 
-      {/* 하단 듀오링고 스타일 탭 네비게이션 바 */}
+      {/* 하단 탭 바 */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-[#e5e5e5] shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-40">
         <div className="max-w-6xl mx-auto flex">
           {tabs.map((tab) => {

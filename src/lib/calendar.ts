@@ -1,9 +1,5 @@
-/**
- * 예약 하나를 구글 캘린더에 등록한다.
- *
- * 캘린더 등록이 실패해도 예약 자체는 이미 저장된 상태이므로,
- * 여기서는 예외를 던지지 않고 실패 사유만 돌려준다.
- */
+import { supabase } from '../supabaseClient'
+
 export interface CalendarBooking {
   customer: string
   service: string
@@ -14,22 +10,35 @@ export interface CalendarBooking {
 
 export interface CalendarResult {
   ok: boolean
-  htmlLink?: string
+  eventId?: string
   error?: string
 }
 
-export async function addBookingToCalendar(
-  booking: CalendarBooking,
-): Promise<CalendarResult> {
+/** 서버 함수는 로그인한 관리자만 받아준다. 그래서 access token 을 같이 보낸다. */
+async function authHeaders(): Promise<Record<string, string> | null> {
+  const { data } = await supabase.auth.getSession()
+  const token = data?.session?.access_token
+  if (!token) return null
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  }
+}
+
+async function callCalendar(body: unknown): Promise<CalendarResult> {
   try {
+    const headers = await authHeaders()
+    if (!headers) {
+      return { ok: false, error: '로그인이 필요합니다' }
+    }
+
     const res = await fetch('/api/calendar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(booking),
+      headers,
+      body: JSON.stringify(body),
     })
 
     // vite dev 서버에는 /api 가 없어서 index.html 이 돌아온다.
-    // 그때 res.json() 이 터지므로 먼저 형식을 본다.
     const contentType = res.headers.get('content-type') ?? ''
     if (!contentType.includes('application/json')) {
       return {
@@ -39,16 +48,25 @@ export async function addBookingToCalendar(
     }
 
     const json = await res.json()
-
     if (!res.ok) {
       return { ok: false, error: json.error ?? `HTTP ${res.status}` }
     }
 
-    return { ok: true, htmlLink: json.htmlLink }
+    return { ok: true, eventId: json.eventId }
   } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : '캘린더 연동 중 오류',
     }
   }
+}
+
+/** 예약을 확정할 때 구글 캘린더에 일정을 만든다. */
+export function addBookingToCalendar(booking: CalendarBooking) {
+  return callCalendar({ action: 'create', booking })
+}
+
+/** 확정을 되돌리거나 예약을 지울 때 캘린더 일정도 지운다. */
+export function removeBookingFromCalendar(eventId: string) {
+  return callCalendar({ action: 'delete', eventId })
 }
