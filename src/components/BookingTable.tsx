@@ -259,16 +259,16 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
 
       <div className="bg-white rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
+          <table className="w-full border-collapse min-w-[860px]">
             <thead>
               <tr className="bg-[#f7f7f7] border-b-2 border-[#e5e5e5] text-[#777777] text-xs font-black uppercase tracking-wider">
-                <th className="px-6 py-4 text-left">고객사</th>
-                <th className="px-6 py-4 text-left">서비스</th>
-                <th className="px-6 py-4 text-left">날짜</th>
-                <th className="px-6 py-4 text-left">시간</th>
-                <th className="px-6 py-4 text-left">위치</th>
-                <th className="px-6 py-4 text-left">상태</th>
-                {isAdmin && <th className="px-6 py-4 text-left">관리</th>}
+                <th className="px-4 py-4 text-left">고객사</th>
+                <th className="px-4 py-4 text-left">서비스</th>
+                <th className="px-4 py-4 text-left whitespace-nowrap">날짜</th>
+                <th className="px-4 py-4 text-left whitespace-nowrap">시간</th>
+                <th className="px-4 py-4 text-left">위치</th>
+                <th className="px-4 py-4 text-left whitespace-nowrap">상태</th>
+                {isAdmin && <th className="px-4 py-4 text-right whitespace-nowrap">관리</th>}
               </tr>
             </thead>
             <tbody className="divide-y-2 divide-[#e5e5e5]">
@@ -278,7 +278,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
 
                 return (
                   <tr key={booking.id} className="hover:bg-[#f7f7f7]/50 transition-colors">
-                    <td className="px-6 py-4 font-black text-[#042c60]">
+                    <td className="px-4 py-4 font-black text-[#042c60]">
                       {isEditing ? (
                         <input
                           className={inputClass}
@@ -289,7 +289,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
                         booking.customer
                       )}
                     </td>
-                    <td className="px-6 py-4 font-bold text-[#3c3c3c]">
+                    <td className="px-4 py-4 font-bold text-[#3c3c3c]">
                       {isEditing ? (
                         <input
                           className={inputClass}
@@ -300,7 +300,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
                         booking.service
                       )}
                     </td>
-                    <td className="px-6 py-4 font-bold text-[#777777]">
+                    <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
                       {isEditing ? (
                         <input
                           type="date"
@@ -312,7 +312,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
                         booking.date
                       )}
                     </td>
-                    <td className="px-6 py-4 font-bold text-[#777777]">
+                    <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
                       {isEditing ? (
                         <input
                           type="time"
@@ -324,7 +324,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
                         booking.time
                       )}
                     </td>
-                    <td className="px-6 py-4 font-medium">
+                    <td className="px-4 py-4 font-medium">
                       {isEditing ? (
                         <input
                           className={inputClass}
@@ -338,13 +338,13 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
                           className="text-[#1cb0f6] font-black underline hover:text-[#0d99dc] cursor-pointer inline-flex items-center gap-1"
                         >
                           {expandedId === booking.id ? '✓ ' : ''}
-                          {booking.address.substring(0, 15)}...
+                          {booking.address.length > 12 ? `${booking.address.substring(0, 12)}...` : booking.address}
                         </button>
                       ) : (
                         <span className="text-[#afafaf]">-</span>
                       )}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-4 py-4 whitespace-nowrap">
                       <button
                         onClick={() => handleStatusToggle(booking)}
                         disabled={!isAdmin || isBusy || isEditing}
@@ -363,20 +363,20 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
                       </button>
                     </td>
                     {isAdmin && (
-                      <td className="px-6 py-4">
-                        <div className="flex gap-2">
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <div className="flex gap-1.5 justify-end">
                           {isEditing ? (
                             <>
                               <button
                                 onClick={() => saveEdit(booking)}
                                 disabled={isBusy}
-                                className="px-3 py-2 rounded-xl text-xs font-black bg-[#58cc02] text-white shadow-[0_2px_0_#46a302] active:translate-y-[2px] active:shadow-none cursor-pointer"
+                                className="px-3 py-2 rounded-xl text-xs font-black bg-[#58cc02] text-white shadow-[0_2px_0_#46a302] active:translate-y-[2px] active:shadow-none cursor-pointer whitespace-nowrap"
                               >
                                 저장
                               </button>
                               <button
                                 onClick={cancelEdit}
-                                className="px-3 py-2 rounded-xl text-xs font-black bg-white text-[#777777] border-2 border-[#e5e5e5] cursor-pointer"
+                                className="px-3 py-2 rounded-xl text-xs font-black bg-white text-[#777777] border-2 border-[#e5e5e5] cursor-pointer whitespace-nowrap"
                               >
                                 취소
                               </button>
@@ -386,16 +386,20 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
                               <button
                                 onClick={() => startEdit(booking)}
                                 disabled={isBusy}
-                                className="px-3 py-2 rounded-xl text-xs font-black bg-white text-[#1cb0f6] border-2 border-[#e5e5e5] hover:border-[#1cb0f6] cursor-pointer"
+                                title="수정"
+                                aria-label="수정"
+                                className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white text-[#1cb0f6] border-2 border-[#e5e5e5] hover:border-[#1cb0f6] cursor-pointer"
                               >
-                                수정
+                                ✏️
                               </button>
                               <button
                                 onClick={() => handleDelete(booking)}
                                 disabled={isBusy}
-                                className="px-3 py-2 rounded-xl text-xs font-black bg-white text-[#ff4b4b] border-2 border-[#e5e5e5] hover:border-[#ff4b4b] cursor-pointer"
+                                title="삭제"
+                                aria-label="삭제"
+                                className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white text-[#ff4b4b] border-2 border-[#e5e5e5] hover:border-[#ff4b4b] cursor-pointer"
                               >
-                                삭제
+                                🗑️
                               </button>
                             </>
                           )}
