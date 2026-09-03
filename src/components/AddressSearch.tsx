@@ -11,12 +11,15 @@ interface AddressSearchProps {
   value: string
   onChange: (address: string) => void
   onSelect?: (result: AddressResult) => void
+  /** 드롭다운이 열리고 닫힐 때 부모에게 알린다. 지도를 잠시 숨기는 데 쓴다. */
+  onOpenChange?: (open: boolean) => void
 }
 
 export default function AddressSearch({
   value,
   onChange,
   onSelect,
+  onOpenChange,
 }: AddressSearchProps) {
   const [results, setResults] = useState<AddressResult[]>([])
   const [loading, setLoading] = useState(false)
@@ -24,6 +27,11 @@ export default function AddressSearch({
   const [selectedIndex, setSelectedIndex] = useState(-1)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // 드롭다운 열림 상태를 부모에게 알린다.
+  useEffect(() => {
+    onOpenChange?.(showResults && results.length > 0)
+  }, [showResults, results.length, onOpenChange])
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {

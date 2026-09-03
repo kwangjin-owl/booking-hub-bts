@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import AddressSearch from './AddressSearch'
+import TimeSelect from './TimeSelect'
 import MapView from './MapView'
 
 interface BookingFormProps {
@@ -21,6 +22,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
   const [time, setTime] = useState('')
   const [address, setAddress] = useState('')
   const [selectedLocation, setSelectedLocation] = useState<AddressResult | null>(null)
+  const [addressOpen, setAddressOpen] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -76,6 +78,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     setTime('')
     setAddress('')
     setSelectedLocation(null)
+    setAddressOpen(false)
     setLoading(false)
     onSuccess?.()
   }
@@ -133,12 +136,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
 
         <div>
           <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">시간 *</label>
-          <input
-            type="time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-            className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
-          />
+          <TimeSelect value={time} onChange={setTime} />
         </div>
 
         <div className="md:col-span-2 relative z-20">
@@ -147,11 +145,13 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
             value={address}
             onChange={setAddress}
             onSelect={setSelectedLocation}
+            onOpenChange={setAddressOpen}
           />
         </div>
       </div>
 
-      {selectedLocation && (
+      {/* 검색 목록이 지도를 덮어 지저분해지므로, 고르는 동안에는 지도를 감춘다 */}
+      {selectedLocation && !addressOpen && (
         <div className="mb-6 p-4 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl">
           <MapView
             lat={selectedLocation.lat}
