@@ -98,12 +98,14 @@ export default function BookingTable({
       const isPast = b.date < today
 
       if (statusFilter === 'past') {
+        // 지난 예약만
         if (!isPast) return false
+      } else if (statusFilter === 'all') {
+        // 전체는 말 그대로 전부 보여준다. 지난 것은 흐리게 표시된다.
       } else {
-        // 지난 예약은 처리할 일이 없으므로 기본 목록에서 빼둔다.
-        // 보려면 '지난 예약' 필터를 누르면 된다.
+        // 대기·확정은 앞으로 처리할 대상이므로 지난 것은 뺀다.
         if (isPast) return false
-        if (statusFilter !== 'all' && b.status !== statusFilter) return false
+        if (b.status !== statusFilter) return false
       }
 
       if (!q) return true
@@ -130,7 +132,7 @@ export default function BookingTable({
     const upcoming = bookings.filter((b) => b.date >= today)
 
     return {
-      all: upcoming.length,
+      all: bookings.length,
       pending: upcoming.filter((b) => b.status === 'pending').length,
       confirmed: upcoming.filter((b) => b.status === 'confirmed').length,
       past: bookings.filter((b) => b.date < today).length,
