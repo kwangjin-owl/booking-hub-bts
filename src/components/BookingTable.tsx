@@ -31,7 +31,7 @@ export default function BookingTable({ refreshKey = 0 }: BookingTableProps) {
         .order('created_at', { ascending: false })
 
       if (error) {
-        console.error('조회 실패:', error)
+        console.error('조회 실패:', error.message, error.code, error.details)
         setBookings([])
       } else {
         setBookings(data || [])

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase } from './supabaseClient'
+import { supabase, initializeSupabase } from './supabaseClient'
 import BookingTable from './components/BookingTable'
 import BookingForm from './components/BookingForm'
 import StatCards from './components/StatCards'
@@ -23,6 +23,7 @@ export default function App() {
 
   useEffect(() => {
     const checkAuth = async () => {
+      await initializeSupabase()
       const { data } = await supabase.auth.getSession()
       if (data?.session?.user?.email === ADMIN_EMAIL) {
         setIsLoggedIn(true)
