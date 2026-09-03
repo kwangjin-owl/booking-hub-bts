@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { addBookingToCalendar, removeBookingFromCalendar } from '../lib/calendar'
+import BookingEditModal, { type EditDraft } from './BookingEditModal'
 import MapView from './MapView'
 
 interface Booking {
@@ -19,8 +20,6 @@ interface BookingTableProps {
   isAdmin?: boolean
 }
 
-type EditDraft = Pick<Booking, 'customer' | 'service' | 'date' | 'time' | 'address'>
-
 export default function BookingTable({ refreshKey = 0, isAdmin = false }: BookingTableProps) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
@@ -28,8 +27,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
   const [mapData, setMapData] = useState<{ lat: number; lon: number } | null>(null)
   const [busyId, setBusyId] = useState<number | null>(null)
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [draft, setDraft] = useState<EditDraft | null>(null)
+  const [editing, setEditing] = useState<Booking | null>(null)
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -112,28 +110,9 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
     setBusyId(null)
   }
 
-  const startEdit = (booking: Booking) => {
-    setEditingId(booking.id)
-    setDraft({
-      customer: booking.customer,
-      service: booking.service,
-      date: booking.date,
-      time: booking.time,
-      address: booking.address ?? '',
-    })
-  }
-
-  const cancelEdit = () => {
-    setEditingId(null)
-    setDraft(null)
-  }
-
-  const saveEdit = async (booking: Booking) => {
-    if (!draft) return
-    if (!draft.customer || !draft.service || !draft.date || !draft.time) {
-      setMessage({ kind: 'err', text: '고객사, 서비스, 날짜, 시간은 비울 수 없습니다.' })
-      return
-    }
+  const handleSaveEdit = async (draft: EditDraft) => {
+    if (!editing) return
+    const booking = editing
 
     setBusyId(booking.id)
     setMessage(null)
@@ -173,7 +152,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
     )
     setMessage({ kind: 'ok', text: '예약을 수정했습니다.' })
     setBusyId(null)
-    cancelEdit()
+    setEditing(null)
   }
 
   const handleDelete = async (booking: Booking) => {
@@ -240,9 +219,6 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
     )
   }
 
-  const inputClass =
-    'w-full px-3 py-2 bg-white border-2 border-[#1cb0f6] rounded-xl font-bold text-sm text-[#3c3c3c] focus:outline-none'
-
   return (
     <div className="space-y-6 font-['Pretendard',sans-serif]">
       {message && (
@@ -259,98 +235,71 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
 
       <div className="bg-white rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[860px]">
+          <table className="w-full border-collapse table-fixed min-w-[900px]">
+            {/* 컬럼 폭을 고정해 헤더와 본문 정렬을 맞춘다 */}
+            <colgroup>
+              <col className="w-[16%]" />
+              <col className="w-[13%]" />
+              <col className="w-[12%]" />
+              <col className="w-[9%]" />
+              <col className="w-[26%]" />
+              <col className="w-[12%]" />
+              {isAdmin && <col className="w-[12%]" />}
+            </colgroup>
             <thead>
               <tr className="bg-[#f7f7f7] border-b-2 border-[#e5e5e5] text-[#777777] text-xs font-black uppercase tracking-wider">
                 <th className="px-4 py-4 text-left">고객사</th>
                 <th className="px-4 py-4 text-left">서비스</th>
-                <th className="px-4 py-4 text-left whitespace-nowrap">날짜</th>
-                <th className="px-4 py-4 text-left whitespace-nowrap">시간</th>
+                <th className="px-4 py-4 text-left">날짜</th>
+                <th className="px-4 py-4 text-left">시간</th>
                 <th className="px-4 py-4 text-left">위치</th>
-                <th className="px-4 py-4 text-left whitespace-nowrap">상태</th>
-                {isAdmin && <th className="px-4 py-4 text-right whitespace-nowrap">관리</th>}
+                <th className="px-4 py-4 text-center">상태</th>
+                {isAdmin && <th className="px-4 py-4 text-center">관리</th>}
               </tr>
             </thead>
             <tbody className="divide-y-2 divide-[#e5e5e5]">
               {bookings.map((booking) => {
-                const isEditing = editingId === booking.id && draft !== null
                 const isBusy = busyId === booking.id
 
                 return (
-                  <tr key={booking.id} className="hover:bg-[#f7f7f7]/50 transition-colors">
-                    <td className="px-4 py-4 font-black text-[#042c60]">
-                      {isEditing ? (
-                        <input
-                          className={inputClass}
-                          value={draft.customer}
-                          onChange={(e) => setDraft({ ...draft, customer: e.target.value })}
-                        />
-                      ) : (
-                        booking.customer
-                      )}
+                  <tr
+                    key={booking.id}
+                    className="hover:bg-[#f7f7f7]/50 transition-colors align-middle"
+                  >
+                    <td className="px-4 py-4 font-black text-[#042c60] break-words">
+                      {booking.customer}
                     </td>
-                    <td className="px-4 py-4 font-bold text-[#3c3c3c]">
-                      {isEditing ? (
-                        <input
-                          className={inputClass}
-                          value={draft.service}
-                          onChange={(e) => setDraft({ ...draft, service: e.target.value })}
-                        />
-                      ) : (
-                        booking.service
-                      )}
+                    <td className="px-4 py-4 font-bold text-[#3c3c3c] break-words">
+                      {booking.service}
                     </td>
                     <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
-                      {isEditing ? (
-                        <input
-                          type="date"
-                          className={inputClass}
-                          value={draft.date}
-                          onChange={(e) => setDraft({ ...draft, date: e.target.value })}
-                        />
-                      ) : (
-                        booking.date
-                      )}
+                      {booking.date}
                     </td>
                     <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
-                      {isEditing ? (
-                        <input
-                          type="time"
-                          className={inputClass}
-                          value={draft.time}
-                          onChange={(e) => setDraft({ ...draft, time: e.target.value })}
-                        />
-                      ) : (
-                        booking.time
-                      )}
+                      {booking.time}
                     </td>
                     <td className="px-4 py-4 font-medium">
-                      {isEditing ? (
-                        <input
-                          className={inputClass}
-                          value={draft.address ?? ''}
-                          placeholder="주소 (선택)"
-                          onChange={(e) => setDraft({ ...draft, address: e.target.value })}
-                        />
-                      ) : booking.address ? (
+                      {booking.address ? (
                         <button
                           onClick={() => handleShowMap(booking)}
-                          className="text-[#1cb0f6] font-black underline hover:text-[#0d99dc] cursor-pointer inline-flex items-center gap-1"
+                          title={booking.address}
+                          /* 두 줄까지 보여주고 그 뒤로만 말줄임한다 */
+                          className="text-left text-[#1cb0f6] font-bold underline hover:text-[#0d99dc] cursor-pointer line-clamp-2 leading-snug"
                         >
-                          {expandedId === booking.id ? '✓ ' : ''}
-                          {booking.address.length > 12 ? `${booking.address.substring(0, 12)}...` : booking.address}
+                          {booking.address}
                         </button>
                       ) : (
                         <span className="text-[#afafaf]">-</span>
                       )}
                     </td>
-                    <td className="px-4 py-4 whitespace-nowrap">
+                    <td className="px-4 py-4 text-center">
                       <button
                         onClick={() => handleStatusToggle(booking)}
-                        disabled={!isAdmin || isBusy || isEditing}
+                        disabled={!isAdmin || isBusy}
                         title={isAdmin ? '클릭해서 상태를 바꿉니다' : '관리자만 변경할 수 있습니다'}
-                        className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-[0_2px_0_rgba(0,0,0,0.1)] ${
-                          isAdmin && !isBusy && !isEditing
+                        /* w-24 로 폭을 고정해 대기 중·확정 완료 크기를 맞춘다 */
+                        className={`w-24 py-2 rounded-xl text-xs font-black tracking-wider transition-all shadow-[0_2px_0_rgba(0,0,0,0.12)] ${
+                          isAdmin && !isBusy
                             ? 'cursor-pointer active:translate-y-[2px] active:shadow-none'
                             : 'cursor-default opacity-70'
                         } ${
@@ -359,50 +308,30 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
                             : 'bg-[#58cc02] text-white'
                         }`}
                       >
-                        {isBusy ? '처리 중...' : booking.status === 'pending' ? '대기 중' : '확정 완료'}
+                        {isBusy ? '처리 중' : booking.status === 'pending' ? '대기 중' : '확정 완료'}
                       </button>
                     </td>
                     {isAdmin && (
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <div className="flex gap-1.5 justify-end">
-                          {isEditing ? (
-                            <>
-                              <button
-                                onClick={() => saveEdit(booking)}
-                                disabled={isBusy}
-                                className="px-3 py-2 rounded-xl text-xs font-black bg-[#58cc02] text-white shadow-[0_2px_0_#46a302] active:translate-y-[2px] active:shadow-none cursor-pointer whitespace-nowrap"
-                              >
-                                저장
-                              </button>
-                              <button
-                                onClick={cancelEdit}
-                                className="px-3 py-2 rounded-xl text-xs font-black bg-white text-[#777777] border-2 border-[#e5e5e5] cursor-pointer whitespace-nowrap"
-                              >
-                                취소
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => startEdit(booking)}
-                                disabled={isBusy}
-                                title="수정"
-                                aria-label="수정"
-                                className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white text-[#1cb0f6] border-2 border-[#e5e5e5] hover:border-[#1cb0f6] cursor-pointer"
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                onClick={() => handleDelete(booking)}
-                                disabled={isBusy}
-                                title="삭제"
-                                aria-label="삭제"
-                                className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white text-[#ff4b4b] border-2 border-[#e5e5e5] hover:border-[#ff4b4b] cursor-pointer"
-                              >
-                                🗑️
-                              </button>
-                            </>
-                          )}
+                      <td className="px-4 py-4">
+                        <div className="flex gap-1.5 justify-center">
+                          <button
+                            onClick={() => setEditing(booking)}
+                            disabled={isBusy}
+                            title="수정"
+                            aria-label="수정"
+                            className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white border-2 border-[#e5e5e5] hover:border-[#1cb0f6] cursor-pointer disabled:opacity-50"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDelete(booking)}
+                            disabled={isBusy}
+                            title="삭제"
+                            aria-label="삭제"
+                            className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white border-2 border-[#e5e5e5] hover:border-[#ff4b4b] cursor-pointer disabled:opacity-50"
+                          >
+                            🗑️
+                          </button>
                         </div>
                       </td>
                     )}
@@ -416,13 +345,14 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
 
       {expandedId && mapData && (
         <div className="bg-white p-6 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] animate-fade-in">
-          <div className="mb-4 flex justify-between items-center">
-            <h3 className="font-black text-[#042c60] text-lg">
+          <div className="mb-4 flex justify-between items-center gap-4">
+            <h3 className="font-black text-[#042c60] text-lg break-words">
               📍 {bookings.find((b) => b.id === expandedId)?.address}
             </h3>
             <button
               onClick={() => setExpandedId(null)}
-              className="w-8 h-8 rounded-xl bg-[#f7f7f7] border-2 border-[#e5e5e5] text-[#777777] font-black hover:bg-[#ff4b4b] hover:text-white hover:border-[#ff4b4b] transition-colors flex items-center justify-center cursor-pointer"
+              aria-label="닫기"
+              className="w-8 h-8 flex-shrink-0 rounded-xl bg-[#f7f7f7] border-2 border-[#e5e5e5] text-[#777777] font-black hover:bg-[#ff4b4b] hover:text-white hover:border-[#ff4b4b] transition-colors flex items-center justify-center cursor-pointer"
             >
               ✕
             </button>
@@ -435,6 +365,15 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
             />
           </div>
         </div>
+      )}
+
+      {editing && (
+        <BookingEditModal
+          booking={editing}
+          saving={busyId === editing.id}
+          onCancel={() => setEditing(null)}
+          onSave={handleSaveEdit}
+        />
       )}
     </div>
   )
