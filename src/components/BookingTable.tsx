@@ -27,7 +27,7 @@ export default function BookingTable({ refreshKey = 0 }: BookingTableProps) {
       setLoading(true)
       const { data, error } = await supabase
         .from('bookings')
-        .select('id, customer, service, date, time, status, address')
+        .select('id, customer, service, date, time, status, address, created_at')
         .order('created_at', { ascending: false })
 
       if (error) {
