@@ -9,6 +9,46 @@
 const TIME_ZONE = 'Asia/Seoul'
 const ADMIN_EMAILS = ['kwangjin.owl@gmail.com']
 
+/**
+ * access token 을 함수 인스턴스에 잠깐 보관한다.
+ *
+ * 구글 access token 은 1시간 동안 쓸 수 있는데, 매 요청마다 새로 받아오면
+ * 구글 왕복이 한 번 더 생겨 확정 버튼이 눈에 띄게 느려진다.
+ * Vercel 함수 인스턴스는 잠시 재사용되므로 그동안은 이 값을 그대로 쓴다.
+ * (인스턴스가 새로 뜨면 캐시도 비니 안전하다)
+ */
+let cachedToken = null
+let cachedTokenExpiry = 0
+
+async function getAccessToken() {
+  // 만료 1분 전부터는 새로 받는다. 쓰는 도중에 만료되는 것을 막는다.
+  if (cachedToken && Date.now() < cachedTokenExpiry - 60_000) {
+    return cachedToken
+  }
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+      grant_type: 'refresh_token',
+    }),
+  })
+
+  const json = await res.json()
+  if (!res.ok) {
+    cachedToken = null
+    cachedTokenExpiry = 0
+    throw new Error(`토큰 발급 실패: ${json.error} ${json.error_description ?? ''}`)
+  }
+
+  cachedToken = json.access_token
+  cachedTokenExpiry = Date.now() + (json.expires_in ?? 3600) * 1000
+  return cachedToken
+}
+
 /** Supabase 에 access token 을 물어 로그인한 사람이 누구인지 확인한다. */
 async function getUser(req) {
   const auth = req.headers.authorization ?? ''
@@ -25,26 +65,6 @@ async function getUser(req) {
   if (!res.ok) return null
 
   return res.json()
-}
-
-/** refresh token 으로 1시간짜리 access token 을 받아온다. */
-async function getAccessToken() {
-  const res = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-      grant_type: 'refresh_token',
-    }),
-  })
-
-  const json = await res.json()
-  if (!res.ok) {
-    throw new Error(`토큰 발급 실패: ${json.error} ${json.error_description ?? ''}`)
-  }
-  return json.access_token
 }
 
 /** 'HH:MM' 에 분을 더해 'HH:MM' 으로 돌려준다. */
@@ -68,18 +88,18 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: `환경변수 누락: ${missing.join(', ')}` })
   }
 
-  // 관리자 확인. 화면에서 버튼을 숨기는 것만으로는 막을 수 없다.
-  const user = await getUser(req)
-  if (!user) {
-    return res.status(401).json({ error: '로그인이 필요합니다' })
-  }
-  if (!ADMIN_EMAILS.includes((user.email ?? '').toLowerCase())) {
-    return res.status(403).json({ error: '관리자만 캘린더를 바꿀 수 있습니다' })
-  }
-
   try {
+    // 관리자 확인과 토큰 준비를 동시에 진행해 왕복 한 번 분량을 줄인다.
+    const [user, accessToken] = await Promise.all([getUser(req), getAccessToken()])
+
+    if (!user) {
+      return res.status(401).json({ error: '로그인이 필요합니다' })
+    }
+    if (!ADMIN_EMAILS.includes((user.email ?? '').toLowerCase())) {
+      return res.status(403).json({ error: '관리자만 캘린더를 바꿀 수 있습니다' })
+    }
+
     const { action, booking, eventId } = req.body ?? {}
-    const accessToken = await getAccessToken()
 
     // ---------- 일정 삭제 ----------
     if (action === 'delete') {
@@ -92,7 +112,7 @@ export default async function handler(req, res) {
         { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } },
       )
 
-      // 410 은 이미 지워진 일정이다. 성공으로 본다.
+      // 404·410 은 이미 지워진 일정이다. 성공으로 본다.
       if (!delRes.ok && delRes.status !== 404 && delRes.status !== 410) {
         return res.status(delRes.status).json({ error: `캘린더 삭제 실패: HTTP ${delRes.status}` })
       }
@@ -136,6 +156,13 @@ export default async function handler(req, res) {
     )
 
     const calJson = await calRes.json()
+
+    // 토큰이 서버에서 미리 만료됐다면 캐시를 버려 다음 요청에서 새로 받게 한다.
+    if (calRes.status === 401) {
+      cachedToken = null
+      cachedTokenExpiry = 0
+    }
+
     if (!calRes.ok) {
       const message = calJson.error?.message ?? `HTTP ${calRes.status}`
       return res.status(calRes.status).json({ error: `캘린더 등록 실패: ${message}` })
