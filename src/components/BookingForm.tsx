@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import LocationPicker from './LocationPicker'
 import TimeSelect from './TimeSelect'
@@ -16,7 +16,45 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
   const [address, setAddress] = useState('')
   const [detailAddress, setDetailAddress] = useState('')
   const [error, setError] = useState('')
+  // 같은 시간대에 이미 잡힌 예약. 막지는 않고 알려만 준다.
+  const [conflicts, setConflicts] = useState<{ customer: string; time: string }[]>([])
   const [loading, setLoading] = useState(false)
+
+  // 날짜와 시간이 채워지면 겹치는 예약이 있는지 미리 확인한다.
+  // 앞뒤 1시간 안에 다른 예약이 있으면 알려준다.
+  useEffect(() => {
+    if (!date || !time) {
+      setConflicts([])
+      return
+    }
+
+    let cancelled = false
+
+    const check = async () => {
+      const { data } = await supabase
+        .from('bookings')
+        .select('customer, time')
+        .eq('date', date)
+
+      if (cancelled || !data) return
+
+      const [h, m] = time.split(':').map(Number)
+      const target = h * 60 + m
+
+      const near = data.filter((b) => {
+        const [bh, bm] = String(b.time).split(':').map(Number)
+        if (Number.isNaN(bh)) return false
+        return Math.abs(bh * 60 + bm - target) < 60
+      })
+
+      setConflicts(near)
+    }
+
+    check()
+    return () => {
+      cancelled = true
+    }
+  }, [date, time])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -72,6 +110,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     setTime('')
     setAddress('')
     setDetailAddress('')
+    setConflicts([])
     setLoading(false)
     onSuccess?.(inserted?.id)
   }
@@ -81,6 +120,18 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       {error && (
         <div className="mb-6 p-4 bg-[#ff4b4b]/10 border-2 border-[#ff4b4b] rounded-2xl text-[#ff4b4b] text-xs font-black">
           {error}
+        </div>
+      )}
+
+      {/* 겹쳐도 등록은 된다. 놓치지 않도록 알려만 준다. */}
+      {conflicts.length > 0 && (
+        <div className="mb-6 p-4 bg-[#ffc800]/15 border-2 border-[#ffc800] rounded-2xl">
+          <p className="text-xs font-black text-[#8a6d00] mb-1">
+            같은 날 비슷한 시간에 예약이 {conflicts.length}건 있습니다
+          </p>
+          <p className="text-xs font-bold text-[#8a6d00]">
+            {conflicts.map((c) => `${c.time} ${c.customer}`).join(' · ')}
+          </p>
         </div>
       )}
 

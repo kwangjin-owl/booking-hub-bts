@@ -24,8 +24,14 @@ interface BookingTableProps {
   highlightId?: number | null
 }
 
-type StatusFilter = 'all' | 'pending' | 'confirmed'
+type StatusFilter = 'all' | 'pending' | 'confirmed' | 'past'
 type SortKey = 'date' | 'created'
+
+/** 로컬 기준 오늘 'YYYY-MM-DD'. toISOString 은 UTC 라 하루가 밀릴 수 있다. */
+function todayString() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 /** '2026-09-03T07:44:38Z' -> '9/3' */
 function shortDate(iso?: string) {
@@ -78,8 +84,20 @@ export default function BookingTable({
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
 
+    const today = todayString()
+
     const filtered = bookings.filter((b) => {
-      if (statusFilter !== 'all' && b.status !== statusFilter) return false
+      const isPast = b.date < today
+
+      if (statusFilter === 'past') {
+        if (!isPast) return false
+      } else {
+        // 지난 예약은 처리할 일이 없으므로 기본 목록에서 빼둔다.
+        // 보려면 '지난 예약' 필터를 누르면 된다.
+        if (isPast) return false
+        if (statusFilter !== 'all' && b.status !== statusFilter) return false
+      }
+
       if (!q) return true
 
       return [b.customer, b.service, b.address ?? '', b.detail_address ?? '', b.date]
@@ -99,14 +117,17 @@ export default function BookingTable({
     })
   }, [bookings, query, statusFilter, sortKey])
 
-  const counts = useMemo(
-    () => ({
-      all: bookings.length,
-      pending: bookings.filter((b) => b.status === 'pending').length,
-      confirmed: bookings.filter((b) => b.status === 'confirmed').length,
-    }),
-    [bookings],
-  )
+  const counts = useMemo(() => {
+    const today = todayString()
+    const upcoming = bookings.filter((b) => b.date >= today)
+
+    return {
+      all: upcoming.length,
+      pending: upcoming.filter((b) => b.status === 'pending').length,
+      confirmed: upcoming.filter((b) => b.status === 'confirmed').length,
+      past: bookings.filter((b) => b.date < today).length,
+    }
+  }, [bookings])
 
   /** 대기 <-> 확정 전환. 확정할 때 캘린더에 넣고, 되돌리면 지운다. */
   const handleStatusToggle = async (booking: Booking) => {
@@ -286,6 +307,7 @@ export default function BookingTable({
     { id: 'all', label: '전체', count: counts.all },
     { id: 'pending', label: '대기 중', count: counts.pending },
     { id: 'confirmed', label: '확정 완료', count: counts.confirmed },
+    { id: 'past', label: '지난 예약', count: counts.past },
   ]
 
   return (
@@ -376,7 +398,9 @@ export default function BookingTable({
               ? isAdmin
                 ? '등록된 예약이 없습니다'
                 : '아직 등록한 예약이 없습니다'
-              : '조건에 맞는 예약이 없습니다'}
+              : statusFilter === 'past'
+                ? '지난 예약이 없습니다'
+                : '조건에 맞는 예약이 없습니다'}
           </p>
         </div>
       ) : (
@@ -409,13 +433,14 @@ export default function BookingTable({
                   const isBusy = busyId === booking.id
 
                   const isNew = highlightId === booking.id
+                  const isPast = booking.date < todayString()
 
                   return (
                     <tr
                       key={booking.id}
                       className={`transition-colors align-middle ${
                         isNew ? 'bg-[#d7ffb8]/50' : 'hover:bg-[#f7f7f7]/50'
-                      }`}
+                      } ${isPast ? 'opacity-60' : ''}`}
                     >
                       <td className="px-4 py-4 font-black text-[#042c60] break-words">
                         {booking.customer}
@@ -430,6 +455,9 @@ export default function BookingTable({
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <span className="font-bold text-[#777777]">{booking.date}</span>
+                        {isPast && (
+                          <span className="ml-1.5 text-[10px] font-black text-[#afafaf]">지남</span>
+                        )}
                         {booking.created_at && (
                           <span className="block text-[10px] font-bold text-[#afafaf]">
                             등록 {shortDate(booking.created_at)}
