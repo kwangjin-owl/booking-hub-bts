@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import AddressSearch from './AddressSearch'
 import MapView from './MapView'
+import { addBookingToCalendar } from '../lib/calendar'
 
 interface BookingFormProps {
   onSuccess?: () => void
@@ -22,11 +23,13 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
   const [address, setAddress] = useState('')
   const [selectedLocation, setSelectedLocation] = useState<AddressResult | null>(null)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setNotice('')
 
     // 필수 칸 검증
     if (!customer || !service || !date || !time) {
@@ -56,6 +59,22 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       return
     }
 
+    // 예약은 저장됐다. 이어서 구글 캘린더에 일정을 만든다.
+    // 캘린더가 실패해도 예약을 되돌리지는 않는다 - 안내만 띄운다.
+    const calendar = await addBookingToCalendar({
+      customer,
+      service,
+      date,
+      time,
+      address: address || null,
+    })
+
+    if (calendar.ok) {
+      setNotice('예약이 저장되고 구글 캘린더에도 등록됐습니다.')
+    } else {
+      setNotice(`예약은 저장됐지만 캘린더 등록에 실패했습니다: ${calendar.error}`)
+    }
+
     // 성공
     setCustomer('')
     setService('')
@@ -82,6 +101,12 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       {error && (
         <div className="mb-6 p-4 bg-[#ff4b4b]/10 border-2 border-[#ff4b4b] rounded-2xl text-[#ff4b4b] text-xs font-black">
           {error}
+        </div>
+      )}
+
+      {notice && (
+        <div className="mb-6 p-4 bg-[#d7ffb8]/40 border-2 border-[#a5ed6e] rounded-2xl text-[#58a700] text-xs font-black">
+          {notice}
         </div>
       )}
 
