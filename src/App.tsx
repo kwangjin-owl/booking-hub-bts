@@ -5,7 +5,7 @@ import { isAdminEmail } from './lib/auth'
 import PageHeader from './components/PageHeader'
 import BookingTable from './components/BookingTable'
 import BookingForm from './components/BookingForm'
-import StatCards from './components/StatCards'
+import StatCards, { type StatTarget } from './components/StatCards'
 import WeatherCard from './components/WeatherCard'
 import CalendarView from './components/CalendarView'
 import LoginPage from './components/LoginPage'
@@ -39,6 +39,8 @@ export default function App() {
   const [refreshKey, setRefreshKey] = useState(0)
   // 방금 등록한 예약. 목록에서 잠시 강조하고 몇 초 뒤 해제한다.
   const [highlightId, setHighlightId] = useState<number | null>(null)
+  // 대시보드 카드를 눌러 넘어올 때 목록에 걸어둘 필터
+  const [listFilter, setListFilter] = useState<StatTarget>('all')
 
   /** 세션 하나로 로그인 상태 전체를 갱신하는 단일 진입점 */
   const applySession = useCallback((session: Session | null) => {
@@ -100,6 +102,7 @@ export default function App() {
   const handleFormSuccess = (newId?: number) => {
     setRefreshKey((prev) => prev + 1)
     setListView('목록')
+    setListFilter('all')
     setActiveTab('예약')
 
     // 예약일순으로 정렬되면 새 예약이 목록 중간에 끼어 눈에 안 띈다.
@@ -207,7 +210,14 @@ export default function App() {
                   : '등록한 예약은 관리자가 확인 후 확정합니다.'
               }
             />
-            <StatCards refreshKey={refreshKey} isAdmin={isAdmin} />
+            <StatCards
+              refreshKey={refreshKey}
+              onSelect={(target) => {
+                setListFilter(target)
+                setListView('목록')
+                setActiveTab('예약')
+              }}
+            />
             <WeatherCard refreshKey={refreshKey} />
           </div>
         )}
@@ -251,7 +261,12 @@ export default function App() {
 
             <div className="min-h-[720px]">
               {listView === '목록' ? (
-                <BookingTable refreshKey={refreshKey} isAdmin={isAdmin} highlightId={highlightId} />
+                <BookingTable
+                  refreshKey={refreshKey}
+                  isAdmin={isAdmin}
+                  highlightId={highlightId}
+                  initialFilter={listFilter}
+                />
               ) : (
                 <CalendarView refreshKey={refreshKey} />
               )}

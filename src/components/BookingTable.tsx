@@ -22,6 +22,8 @@ interface BookingTableProps {
   isAdmin?: boolean
   /** 방금 등록한 예약. 목록에서 잠시 강조해 어디 있는지 알려준다. */
   highlightId?: number | null
+  /** 대시보드 카드에서 넘어올 때 걸어둘 상태 필터 */
+  initialFilter?: StatusFilter
 }
 
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'past'
@@ -45,6 +47,7 @@ export default function BookingTable({
   refreshKey = 0,
   isAdmin = false,
   highlightId = null,
+  initialFilter = 'all',
 }: BookingTableProps) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,8 +58,13 @@ export default function BookingTable({
   const [editing, setEditing] = useState<Booking | null>(null)
 
   const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilter)
   const [sortKey, setSortKey] = useState<SortKey>('date')
+
+  // 대시보드에서 카드를 누를 때마다 필터를 갈아 끼운다.
+  useEffect(() => {
+    setStatusFilter(initialFilter)
+  }, [initialFilter])
 
   useEffect(() => {
     const fetchBookings = async () => {
