@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { supabase, initializeSupabase } from './supabaseClient'
+import { supabase } from './supabaseClient'
 import BookingTable from './components/BookingTable'
 import BookingForm from './components/BookingForm'
 import StatCards from './components/StatCards'
@@ -23,7 +23,6 @@ export default function App() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      await initializeSupabase()
       const { data } = await supabase.auth.getSession()
       if (data?.session?.user?.email === ADMIN_EMAIL) {
         setIsLoggedIn(true)
@@ -67,20 +66,21 @@ export default function App() {
     setActiveTab('예약목록')
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
-          <p className="text-gray-600">로딩 중...</p>
-        </div>
-      </div>
-    )
-  }
+  // 로그인 체크 임시 비활성화 (Supabase 인증 설정 완료 후 재활성화)
+  // if (loading) {
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center">
+  //       <div className="text-center">
+  //         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+  //         <p className="text-gray-600">로딩 중...</p>
+  //       </div>
+  //     </div>
+  //   )
+  // }
 
-  if (!isLoggedIn) {
-    return <LoginPage onLoginSuccess={() => setIsLoggedIn(true)} />
-  }
+  // if (!isLoggedIn) {
+  //   return <LoginPage onLoginSuccess={() => setIsLoggedIn(true)} />
+  // }
 
   const tabs: { id: TabType; label: string }[] = [
     { id: '대시보드', label: '대시보드' },
