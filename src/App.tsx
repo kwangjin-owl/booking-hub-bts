@@ -8,7 +8,7 @@ import StatCards from './components/StatCards'
 import CalendarView from './components/CalendarView'
 import LoginPage from './components/LoginPage'
 
-type TabType = '대시보드' | '예약목록' | '예약추가' | '상태관리' | '위치확인'
+type TabType = '대시보드' | '예약' | '예약추가'
 type ListViewType = '목록' | '캘린더'
 
 /** 구글에서 돌아온 뒤 주소창에 남는 ?code=... / #access_token=... 을 지운다. */
@@ -96,7 +96,7 @@ export default function App() {
   const handleFormSuccess = () => {
     setRefreshKey((prev) => prev + 1)
     setListView('목록')
-    setActiveTab('예약목록')
+    setActiveTab('예약')
   }
 
   const handleLogout = async () => {
@@ -119,17 +119,12 @@ export default function App() {
     return <LoginPage onLoginSuccess={handleLoginSuccess} />
   }
 
-  // 상태관리·위치확인은 전체 예약을 다루는 화면이라 관리자에게만 보인다.
+  // 예약목록·상태관리·위치확인은 같은 표를 보여주고 있었다.
+  // 하나로 합치고, 구분은 표 안의 상태 필터와 검색으로 한다.
   const tabs: { id: TabType; label: string }[] = [
     { id: '대시보드', label: '대시보드' },
-    { id: '예약목록', label: isAdmin ? '예약목록' : '내 예약' },
+    { id: '예약', label: isAdmin ? '예약 관리' : '내 예약' },
     { id: '예약추가', label: '예약추가' },
-    ...(isAdmin
-      ? ([
-          { id: '상태관리', label: '상태관리' },
-          { id: '위치확인', label: '위치확인' },
-        ] as { id: TabType; label: string }[])
-      : []),
   ]
 
   const listViews: { id: ListViewType; label: string }[] = [
@@ -215,19 +210,19 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === '예약목록' && (
+        {activeTab === '예약' && (
           <div className="space-y-6">
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
                 <h2 className="text-3xl font-black text-[#042c60]">
-                  {isAdmin ? '예약 목록' : '내 예약'}
+                  {isAdmin ? '예약 관리' : '내 예약'}
                 </h2>
                 <p className="text-[#777777] mt-1 font-medium">
-                  {listView === '목록'
-                    ? isAdmin
-                      ? '등록된 모든 예약을 표 형태로 확인합니다.'
-                      : '내가 등록한 예약을 표 형태로 확인합니다.'
-                    : '월별 예약 일정을 캘린더 형태로 조망합니다.'}
+                  {listView === '캘린더'
+                    ? '월별 예약 일정을 캘린더 형태로 조망합니다.'
+                    : isAdmin
+                      ? '검색과 상태 필터로 예약을 찾고, 확정·수정·삭제할 수 있습니다.'
+                      : '내가 등록한 예약을 확인합니다. 주소를 누르면 지도가 열립니다.'}
                 </p>
               </div>
               <span className="text-xs font-bold text-[#777777] bg-[#f7f7f7] border-2 border-[#e5e5e5] px-3 py-1.5 rounded-xl">
@@ -278,31 +273,6 @@ export default function App() {
               </div>
             </div>
             <BookingForm onSuccess={handleFormSuccess} />
-          </div>
-        )}
-
-        {isAdmin && activeTab === '상태관리' && (
-          <div className="space-y-6">
-            <div className="bg-[#f7f7f7] border-2 border-[#e5e5e5] p-6 rounded-2xl">
-              <h2 className="text-3xl font-black text-[#042c60] mb-2">상태 관리</h2>
-              <p className="text-[#777777] font-medium">
-                대기 중인 예약을 확정하면 구글 캘린더에 일정이 자동으로 등록됩니다. 확정을 되돌리면
-                일정도 함께 삭제됩니다.
-              </p>
-            </div>
-            <BookingTable refreshKey={refreshKey} isAdmin={isAdmin} />
-          </div>
-        )}
-
-        {isAdmin && activeTab === '위치확인' && (
-          <div className="space-y-6">
-            <div className="bg-[#f7f7f7] border-2 border-[#e5e5e5] p-6 rounded-2xl">
-              <h2 className="text-3xl font-black text-[#042c60] mb-2">위치 확인</h2>
-              <p className="text-[#777777] font-medium">
-                등록된 주소 링크를 클릭하여 OpenStreetMap 지도를 통해 위치를 시각적으로 확인하세요.
-              </p>
-            </div>
-            <BookingTable refreshKey={refreshKey} isAdmin={isAdmin} />
           </div>
         )}
       </div>

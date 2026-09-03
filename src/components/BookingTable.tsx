@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { addBookingToCalendar, removeBookingFromCalendar } from '../lib/calendar'
 import BookingEditModal, { type EditDraft } from './BookingEditModal'
@@ -20,6 +20,8 @@ interface BookingTableProps {
   isAdmin?: boolean
 }
 
+type StatusFilter = 'all' | 'pending' | 'confirmed'
+
 export default function BookingTable({ refreshKey = 0, isAdmin = false }: BookingTableProps) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
@@ -29,6 +31,9 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [editing, setEditing] = useState<Booking | null>(null)
 
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+
   useEffect(() => {
     const fetchBookings = async () => {
       setLoading(true)
@@ -36,7 +41,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
       const { data, error } = await supabase
         .from('bookings')
         .select('id, customer, service, date, time, status, address, calendar_event_id, created_at')
-        .order('created_at', { ascending: false })
+        .order('date', { ascending: true })
 
       if (error) {
         console.error('조회 실패:', error.message, error.code, error.details)
@@ -49,6 +54,30 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
 
     fetchBookings()
   }, [refreshKey])
+
+  /** 검색어와 상태 필터를 함께 적용한다. */
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase()
+
+    return bookings.filter((b) => {
+      if (statusFilter !== 'all' && b.status !== statusFilter) return false
+      if (!q) return true
+
+      return [b.customer, b.service, b.address ?? '', b.date]
+        .join(' ')
+        .toLowerCase()
+        .includes(q)
+    })
+  }, [bookings, query, statusFilter])
+
+  const counts = useMemo(
+    () => ({
+      all: bookings.length,
+      pending: bookings.filter((b) => b.status === 'pending').length,
+      confirmed: bookings.filter((b) => b.status === 'confirmed').length,
+    }),
+    [bookings],
+  )
 
   /** 대기 <-> 확정 전환. 확정할 때 캘린더에 넣고, 되돌리면 지운다. */
   const handleStatusToggle = async (booking: Booking) => {
@@ -208,16 +237,11 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
     return <div className="text-center py-12 text-[#777777] font-bold">로딩 중...</div>
   }
 
-  if (bookings.length === 0) {
-    return (
-      <div className="bg-white p-12 rounded-2xl border-2 border-[#e5e5e5] text-center font-['Pretendard',sans-serif]">
-        <div className="text-4xl mb-3">📭</div>
-        <p className="text-[#777777] font-bold">
-          {isAdmin ? '등록된 예약이 없습니다' : '아직 등록한 예약이 없습니다'}
-        </p>
-      </div>
-    )
-  }
+  const filters: { id: StatusFilter; label: string; count: number }[] = [
+    { id: 'all', label: '전체', count: counts.all },
+    { id: 'pending', label: '대기 중', count: counts.pending },
+    { id: 'confirmed', label: '확정 완료', count: counts.confirmed },
+  ]
 
   return (
     <div className="space-y-6 font-['Pretendard',sans-serif]">
@@ -233,115 +257,174 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse table-fixed min-w-[900px]">
-            {/* 컬럼 폭을 고정해 헤더와 본문 정렬을 맞춘다 */}
-            <colgroup>
-              <col className="w-[16%]" />
-              <col className="w-[13%]" />
-              <col className="w-[12%]" />
-              <col className="w-[9%]" />
-              <col className="w-[26%]" />
-              <col className="w-[12%]" />
-              {isAdmin && <col className="w-[12%]" />}
-            </colgroup>
-            <thead>
-              <tr className="bg-[#f7f7f7] border-b-2 border-[#e5e5e5] text-[#777777] text-xs font-black uppercase tracking-wider">
-                <th className="px-4 py-4 text-left">고객사</th>
-                <th className="px-4 py-4 text-left">서비스</th>
-                <th className="px-4 py-4 text-left">날짜</th>
-                <th className="px-4 py-4 text-left">시간</th>
-                <th className="px-4 py-4 text-left">위치</th>
-                <th className="px-4 py-4 text-center">상태</th>
-                {isAdmin && <th className="px-4 py-4 text-center">관리</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y-2 divide-[#e5e5e5]">
-              {bookings.map((booking) => {
-                const isBusy = busyId === booking.id
+      {/* 검색 + 상태 필터 */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+        <div className="relative flex-1">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#afafaf]">🔍</span>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="고객사, 서비스, 주소, 날짜로 검색"
+            className="w-full pl-11 pr-10 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
+          />
+          {query && (
+            <button
+              onClick={() => setQuery('')}
+              aria-label="검색어 지우기"
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg text-[#777777] font-black hover:bg-[#e5e5e5] cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
+        </div>
 
-                return (
-                  <tr
-                    key={booking.id}
-                    className="hover:bg-[#f7f7f7]/50 transition-colors align-middle"
-                  >
-                    <td className="px-4 py-4 font-black text-[#042c60] break-words">
-                      {booking.customer}
-                    </td>
-                    <td className="px-4 py-4 font-bold text-[#3c3c3c] break-words">
-                      {booking.service}
-                    </td>
-                    <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
-                      {booking.date}
-                    </td>
-                    <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
-                      {booking.time}
-                    </td>
-                    <td className="px-4 py-4 font-medium">
-                      {booking.address ? (
-                        <button
-                          onClick={() => handleShowMap(booking)}
-                          title={booking.address}
-                          /* 두 줄까지 보여주고 그 뒤로만 말줄임한다 */
-                          className="text-left text-[#1cb0f6] font-bold underline hover:text-[#0d99dc] cursor-pointer line-clamp-2 leading-snug"
-                        >
-                          {booking.address}
-                        </button>
-                      ) : (
-                        <span className="text-[#afafaf]">-</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <button
-                        onClick={() => handleStatusToggle(booking)}
-                        disabled={!isAdmin || isBusy}
-                        title={isAdmin ? '클릭해서 상태를 바꿉니다' : '관리자만 변경할 수 있습니다'}
-                        /* w-24 로 폭을 고정해 대기 중·확정 완료 크기를 맞춘다 */
-                        className={`w-24 py-2 rounded-xl text-xs font-black tracking-wider transition-all shadow-[0_2px_0_rgba(0,0,0,0.12)] ${
-                          isAdmin && !isBusy
-                            ? 'cursor-pointer active:translate-y-[2px] active:shadow-none'
-                            : 'cursor-default opacity-70'
-                        } ${
-                          booking.status === 'pending'
-                            ? 'bg-[#ffc800] text-[#042c60]'
-                            : 'bg-[#58cc02] text-white'
-                        }`}
-                      >
-                        {isBusy ? '처리 중' : booking.status === 'pending' ? '대기 중' : '확정 완료'}
-                      </button>
-                    </td>
-                    {isAdmin && (
-                      <td className="px-4 py-4">
-                        <div className="flex gap-1.5 justify-center">
-                          <button
-                            onClick={() => setEditing(booking)}
-                            disabled={isBusy}
-                            title="수정"
-                            aria-label="수정"
-                            className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white border-2 border-[#e5e5e5] hover:border-[#1cb0f6] cursor-pointer disabled:opacity-50"
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            onClick={() => handleDelete(booking)}
-                            disabled={isBusy}
-                            title="삭제"
-                            aria-label="삭제"
-                            className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white border-2 border-[#e5e5e5] hover:border-[#ff4b4b] cursor-pointer disabled:opacity-50"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="flex gap-2 p-1.5 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl w-fit">
+          {filters.map((f) => {
+            const isActive = statusFilter === f.id
+            return (
+              <button
+                key={f.id}
+                onClick={() => setStatusFilter(f.id)}
+                className={`px-4 py-2 text-xs font-black rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? 'bg-white text-[#58cc02] border-2 border-[#58cc02] shadow-[0_2px_0_#46a302]'
+                    : 'bg-transparent text-[#777777] border-2 border-transparent hover:text-[#3c3c3c]'
+                }`}
+              >
+                {f.label} {f.count}
+              </button>
+            )
+          })}
         </div>
       </div>
+
+      {visible.length === 0 ? (
+        <div className="bg-white p-12 rounded-2xl border-2 border-[#e5e5e5] text-center">
+          <div className="text-4xl mb-3">{bookings.length === 0 ? '📭' : '🔍'}</div>
+          <p className="text-[#777777] font-bold">
+            {bookings.length === 0
+              ? isAdmin
+                ? '등록된 예약이 없습니다'
+                : '아직 등록한 예약이 없습니다'
+              : '조건에 맞는 예약이 없습니다'}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse table-fixed min-w-[900px]">
+              {/* 컬럼 폭을 고정해 헤더와 본문 정렬을 맞춘다 */}
+              <colgroup>
+                <col className="w-[16%]" />
+                <col className="w-[13%]" />
+                <col className="w-[12%]" />
+                <col className="w-[9%]" />
+                <col className="w-[26%]" />
+                <col className="w-[12%]" />
+                {isAdmin && <col className="w-[12%]" />}
+              </colgroup>
+              <thead>
+                <tr className="bg-[#f7f7f7] border-b-2 border-[#e5e5e5] text-[#777777] text-xs font-black uppercase tracking-wider">
+                  <th className="px-4 py-4 text-left">고객사</th>
+                  <th className="px-4 py-4 text-left">서비스</th>
+                  <th className="px-4 py-4 text-left">날짜</th>
+                  <th className="px-4 py-4 text-left">시간</th>
+                  <th className="px-4 py-4 text-left">위치</th>
+                  <th className="px-4 py-4 text-center">상태</th>
+                  {isAdmin && <th className="px-4 py-4 text-center">관리</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y-2 divide-[#e5e5e5]">
+                {visible.map((booking) => {
+                  const isBusy = busyId === booking.id
+
+                  return (
+                    <tr
+                      key={booking.id}
+                      className="hover:bg-[#f7f7f7]/50 transition-colors align-middle"
+                    >
+                      <td className="px-4 py-4 font-black text-[#042c60] break-words">
+                        {booking.customer}
+                      </td>
+                      <td className="px-4 py-4 font-bold text-[#3c3c3c] break-words">
+                        {booking.service}
+                      </td>
+                      <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
+                        {booking.date}
+                      </td>
+                      <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
+                        {booking.time}
+                      </td>
+                      <td className="px-4 py-4 font-medium">
+                        {booking.address ? (
+                          <button
+                            onClick={() => handleShowMap(booking)}
+                            title={booking.address}
+                            className="text-left text-[#1cb0f6] font-bold underline hover:text-[#0d99dc] cursor-pointer line-clamp-2 leading-snug"
+                          >
+                            {booking.address}
+                          </button>
+                        ) : (
+                          <span className="text-[#afafaf]">-</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <button
+                          onClick={() => handleStatusToggle(booking)}
+                          disabled={!isAdmin || isBusy}
+                          title={
+                            isAdmin ? '클릭해서 상태를 바꿉니다' : '관리자만 변경할 수 있습니다'
+                          }
+                          className={`w-24 py-2 rounded-xl text-xs font-black tracking-wider transition-all shadow-[0_2px_0_rgba(0,0,0,0.12)] ${
+                            isAdmin && !isBusy
+                              ? 'cursor-pointer active:translate-y-[2px] active:shadow-none'
+                              : 'cursor-default opacity-70'
+                          } ${
+                            booking.status === 'pending'
+                              ? 'bg-[#ffc800] text-[#042c60]'
+                              : 'bg-[#58cc02] text-white'
+                          }`}
+                        >
+                          {isBusy
+                            ? '처리 중'
+                            : booking.status === 'pending'
+                              ? '대기 중'
+                              : '확정 완료'}
+                        </button>
+                      </td>
+                      {isAdmin && (
+                        <td className="px-4 py-4">
+                          <div className="flex gap-1.5 justify-center">
+                            <button
+                              onClick={() => setEditing(booking)}
+                              disabled={isBusy}
+                              title="수정"
+                              aria-label="수정"
+                              className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white border-2 border-[#e5e5e5] hover:border-[#1cb0f6] cursor-pointer disabled:opacity-50"
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => handleDelete(booking)}
+                              disabled={isBusy}
+                              title="삭제"
+                              aria-label="삭제"
+                              className="w-9 h-9 flex items-center justify-center rounded-xl text-sm bg-white border-2 border-[#e5e5e5] hover:border-[#ff4b4b] cursor-pointer disabled:opacity-50"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {expandedId && mapData && (
         <div className="bg-white p-6 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] animate-fade-in">
