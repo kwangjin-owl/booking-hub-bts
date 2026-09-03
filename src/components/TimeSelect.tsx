@@ -31,6 +31,41 @@ function build(meridiem: string, hour12: string, minute: string) {
   return `${String(hour24).padStart(2, '0')}:${minute || '00'}`
 }
 
+/** 다른 입력칸과 같은 모양을 쓰되, 화살표만 직접 그린다. */
+function Field({
+  label,
+  value,
+  onChange,
+  children,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  children: React.ReactNode
+  placeholder: string
+}) {
+  return (
+    <div className="relative">
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full pl-4 pr-9 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all cursor-pointer appearance-none"
+      >
+        <option value="" disabled>
+          {placeholder}
+        </option>
+        {children}
+      </select>
+      {/* 브라우저 기본 화살표를 지우고 같은 자리에 직접 그린다 */}
+      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#777777]">
+        ▼
+      </span>
+    </div>
+  )
+}
+
 /**
  * 오전/오후 · 시 · 분을 각각 고르는 시간 입력.
  *
@@ -44,58 +79,46 @@ export default function TimeSelect({ value, onChange }: TimeSelectProps) {
   // 목록에 없으면 그 값을 끼워 넣어, 열었다 닫아도 시간이 바뀌지 않게 한다.
   const minuteOptions = minute && !MINUTES.includes(minute) ? [...MINUTES, minute].sort() : MINUTES
 
-  const selectClass =
-    'px-3 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all cursor-pointer appearance-none text-center'
-
   return (
-    <div className="flex items-center gap-2">
-      <select
-        aria-label="오전 오후"
+    <div className="grid grid-cols-3 gap-2">
+      <Field
+        label="오전 오후"
+        placeholder="오전/오후"
         value={meridiem}
-        onChange={(e) => onChange(build(e.target.value, hour12 || '9', minute))}
-        className={`${selectClass} flex-1`}
+        onChange={(v) => onChange(build(v, hour12 || '9', minute))}
       >
-        <option value="" disabled>
-          --
-        </option>
         {MERIDIEMS.map((m) => (
           <option key={m.value} value={m.value}>
             {m.label}
           </option>
         ))}
-      </select>
+      </Field>
 
-      <select
-        aria-label="시"
+      <Field
+        label="시"
+        placeholder="시"
         value={hour12}
-        onChange={(e) => onChange(build(meridiem || 'AM', e.target.value, minute))}
-        className={`${selectClass} flex-1`}
+        onChange={(v) => onChange(build(meridiem || 'AM', v, minute))}
       >
-        <option value="" disabled>
-          시
-        </option>
         {HOURS12.map((h) => (
           <option key={h} value={h}>
             {h}시
           </option>
         ))}
-      </select>
+      </Field>
 
-      <select
-        aria-label="분"
+      <Field
+        label="분"
+        placeholder="분"
         value={minute}
-        onChange={(e) => onChange(build(meridiem || 'AM', hour12 || '9', e.target.value))}
-        className={`${selectClass} flex-1`}
+        onChange={(v) => onChange(build(meridiem || 'AM', hour12 || '9', v))}
       >
-        <option value="" disabled>
-          분
-        </option>
         {minuteOptions.map((m) => (
           <option key={m} value={m}>
             {m}분
           </option>
         ))}
-      </select>
+      </Field>
     </div>
   )
 }

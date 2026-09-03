@@ -15,17 +15,45 @@ interface LocationPickerProps {
   onChange: (address: string) => void
 }
 
-/** 좌표를 못 찾았을 때 처음 보여줄 위치 (서울시청) */
+/** 좌표를 모를 때 처음 보여줄 위치 (서울시청) */
 const DEFAULT_CENTER: [number, number] = [37.5665, 126.978]
 
 export default function LocationPicker({ value, onChange }: LocationPickerProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<L.Map | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 검색으로 지도를 옮겼을 때는 역지오코딩을 건너뛴다.
+  const skipNextMoveRef = useRef(false)
 
-  const [center, setCenter] = useState<[number, number]>(DEFAULT_CENTER)
-  const [moved, setMoved] = useState(false)
+  const [preview, setPreview] = useState('')
   const [resolving, setResolving] = useState(false)
-  const [hint, setHint] = useState('')
+
+  /** 지도 중심 좌표를 주소로 바꿔 미리보기에 채운다. */
+  const resolveCenter = async (lat: number, lon: number) => {
+    setResolving(true)
+    try {
+      const url = new URL('https://nominatim.openstreetmap.org/reverse')
+      url.searchParams.append('lat', String(lat))
+      url.searchParams.append('lon', String(lon))
+      url.searchParams.append('format', 'json')
+      url.searchParams.append('accept-language', 'ko')
+
+      const res = await fetch(url.toString())
+      const data = await res.json()
+
+      if (data?.display_name) {
+        setPreview(data.display_name)
+        // 지도를 움직인 그 자리가 곧 선택한 주소가 된다. 따로 버튼을 누를 필요가 없다.
+        onChange(data.display_name)
+      } else {
+        setPreview('이 위치의 주소를 찾지 못했습니다')
+      }
+    } catch {
+      setPreview('주소를 불러오지 못했습니다')
+    } finally {
+      setResolving(false)
+    }
+  }
 
   // 지도는 한 번만 만들고 계속 유지한다.
   // 검색할 때마다 지우고 다시 그리면 화면이 튀어서 정신없다.
@@ -40,11 +68,19 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
       maxZoom: 19,
     }).addTo(map)
 
-    // 지도를 움직이면 가운데 좌표를 기억해 둔다. 확정은 버튼을 눌러야 된다.
+    map.on('movestart', () => {
+      if (!skipNextMoveRef.current) setPreview('')
+    })
+
     map.on('moveend', () => {
+      if (skipNextMoveRef.current) {
+        skipNextMoveRef.current = false
+        return
+      }
+      // Nominatim 은 초당 1회 제한이 있어 조금 기다렸다 부른다.
+      if (debounceRef.current) clearTimeout(debounceRef.current)
       const c = map.getCenter()
-      setCenter([c.lat, c.lng])
-      setMoved(true)
+      debounceRef.current = setTimeout(() => resolveCenter(c.lat, c.lng), 600)
     })
 
     mapInstanceRef.current = map
@@ -53,48 +89,23 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
     setTimeout(() => map.invalidateSize(), 200)
 
     return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
       map.remove()
       mapInstanceRef.current = null
     }
+    // 최초 1회만 만든다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   /** 검색 결과를 고르면 지도를 그 위치로 옮긴다. */
   const handleSelect = (result: AddressResult) => {
     onChange(result.display_name)
-    setCenter([result.lat, result.lon])
-    setMoved(false)
-    setHint('')
+    setPreview(result.display_name)
+    skipNextMoveRef.current = true
     mapInstanceRef.current?.setView([result.lat, result.lon], 16)
   }
 
-  /** 지도를 옮긴 뒤 그 자리를 주소로 바꾼다. (역지오코딩) */
-  const applyMapCenter = async () => {
-    setResolving(true)
-    setHint('')
-
-    try {
-      const url = new URL('https://nominatim.openstreetmap.org/reverse')
-      url.searchParams.append('lat', String(center[0]))
-      url.searchParams.append('lon', String(center[1]))
-      url.searchParams.append('format', 'json')
-      url.searchParams.append('accept-language', 'ko')
-
-      const res = await fetch(url.toString())
-      const data = await res.json()
-
-      if (data?.display_name) {
-        onChange(data.display_name)
-        setMoved(false)
-        setHint('지도 위치로 주소를 설정했습니다.')
-      } else {
-        setHint('이 위치의 주소를 찾지 못했습니다. 조금 옮겨서 다시 시도해 보세요.')
-      }
-    } catch {
-      setHint('주소 조회에 실패했습니다. 잠시 후 다시 시도해 주세요.')
-    } finally {
-      setResolving(false)
-    }
-  }
+  const shown = preview || value
 
   return (
     <div className="space-y-3">
@@ -109,24 +120,25 @@ export default function LocationPicker({ value, onChange }: LocationPickerProps)
 
         {/* 가운데 고정 핀. 지도를 끌면 이 지점이 선택 위치가 된다 */}
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-[400]">
-          <span className="text-3xl -translate-y-3 drop-shadow">📍</span>
+          <span className="text-3xl -translate-y-3 drop-shadow-lg">📍</span>
         </div>
 
-        {/* 지도를 움직였을 때만 확정 버튼을 띄운다 */}
-        {moved && (
-          <button
-            type="button"
-            onClick={applyMapCenter}
-            disabled={resolving}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[400] px-5 py-2.5 rounded-2xl bg-[#58cc02] text-white text-xs font-black uppercase tracking-wider shadow-[0_3px_0_#46a302] active:translate-y-[3px] active:shadow-none cursor-pointer disabled:bg-gray-400"
-          >
-            {resolving ? '주소 확인 중...' : '이 위치로 설정'}
-          </button>
-        )}
+        {/* 핀이 가리키는 곳의 주소를 지도 위에 바로 띄운다 */}
+        <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-[400]">
+          <div className="bg-white/95 border-2 border-[#e5e5e5] rounded-2xl px-4 py-2.5 shadow-[0_3px_0_#e5e5e5]">
+            {resolving ? (
+              <p className="text-xs font-black text-[#777777]">주소 확인 중...</p>
+            ) : shown ? (
+              <p className="text-xs font-bold text-[#3c3c3c] line-clamp-2 leading-snug">{shown}</p>
+            ) : (
+              <p className="text-xs font-black text-[#afafaf]">지도를 끌어 위치를 맞추세요</p>
+            )}
+          </div>
+        </div>
       </div>
 
       <p className="text-[11px] text-[#777777] font-bold">
-        {hint || '주소를 검색하거나, 지도를 끌어 핀을 맞춘 뒤 «이 위치로 설정»을 누르세요.'}
+        주소를 검색하거나, 지도를 끌어 핀을 맞추면 그 위치가 주소로 저장됩니다.
       </p>
     </div>
   )
