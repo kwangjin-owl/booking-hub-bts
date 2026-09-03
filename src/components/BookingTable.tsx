@@ -24,6 +24,8 @@ interface BookingTableProps {
   highlightId?: number | null
   /** 대시보드 카드에서 넘어올 때 걸어둘 상태 필터 */
   initialFilter?: StatusFilter
+  /** 같은 카드를 다시 눌렀을 때도 필터를 다시 걸기 위한 신호 */
+  filterNonce?: number
 }
 
 type StatusFilter = 'all' | 'pending' | 'confirmed' | 'past'
@@ -48,6 +50,7 @@ export default function BookingTable({
   isAdmin = false,
   highlightId = null,
   initialFilter = 'all',
+  filterNonce = 0,
 }: BookingTableProps) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,10 +64,19 @@ export default function BookingTable({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialFilter)
   const [sortKey, setSortKey] = useState<SortKey>('date')
 
+  // 알림은 잠시 뒤 스스로 사라진다. 계속 남아 있으면 방금 일인지 아까 일인지 헷갈린다.
+  useEffect(() => {
+    if (!message) return
+    const t = setTimeout(() => setMessage(null), message.kind === 'ok' ? 4000 : 8000)
+    return () => clearTimeout(t)
+  }, [message])
+
   // 대시보드에서 카드를 누를 때마다 필터를 갈아 끼운다.
+  // initialFilter 만 보면 같은 카드를 두 번 누를 때 값이 그대로라 반응하지 않는다.
   useEffect(() => {
     setStatusFilter(initialFilter)
-  }, [initialFilter])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFilter, filterNonce])
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -142,6 +154,15 @@ export default function BookingTable({
   /** 대기 <-> 확정 전환. 확정할 때 캘린더에 넣고, 되돌리면 지운다. */
   const handleStatusToggle = async (booking: Booking) => {
     if (!isAdmin) return
+
+    // 이미 지난 날짜를 확정하면 과거에 캘린더 일정이 생긴다. 실수인 경우가 많아 한 번 묻는다.
+    if (
+      booking.status === 'pending' &&
+      booking.date < todayString() &&
+      !window.confirm(`${booking.date}은 이미 지난 날짜입니다. 그래도 확정할까요?`)
+    ) {
+      return
+    }
 
     setBusyId(booking.id)
     setMessage(null)

@@ -42,6 +42,13 @@ export default function CalendarView({ refreshKey = 0, isAdmin = false }: Calend
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [editing, setEditing] = useState<Booking | null>(null)
 
+  // 알림은 잠시 뒤 스스로 사라진다.
+  useEffect(() => {
+    if (!message) return
+    const t = setTimeout(() => setMessage(null), message.kind === 'ok' ? 4000 : 8000)
+    return () => clearTimeout(t)
+  }, [message])
+
   useEffect(() => {
     const fetchBookings = async () => {
       setLoading(true)
@@ -119,6 +126,15 @@ export default function CalendarView({ refreshKey = 0, isAdmin = false }: Calend
   /** 대기 <-> 확정 전환. 목록 화면과 같은 규칙을 쓴다. */
   const handleStatusToggle = async (booking: Booking) => {
     if (!isAdmin) return
+
+    // 이미 지난 날짜를 확정하면 과거에 캘린더 일정이 생긴다.
+    if (
+      booking.status === 'pending' &&
+      booking.date < todayString() &&
+      !window.confirm(`${booking.date}은 이미 지난 날짜입니다. 그래도 확정할까요?`)
+    ) {
+      return
+    }
 
     setBusyId(booking.id)
     setMessage(null)

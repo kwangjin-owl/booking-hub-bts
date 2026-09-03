@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import LocationPicker from './LocationPicker'
+import ConflictNotice from './ConflictNotice'
+import { useConflicts } from '../lib/useConflicts'
 import TimeSelect from './TimeSelect'
 
 export interface EditableBooking {
@@ -47,9 +49,20 @@ export default function BookingEditModal({
   const [draft, setDraft] = useState<EditDraft>(initial)
   const [error, setError] = useState('')
 
-  const isDirty = (Object.keys(initial) as (keyof EditDraft)[]).some(
-    (k) => draft[k] !== initial[k],
-  )
+  // 시간을 옮기다 남의 예약과 겹칠 수 있다. 자기 자신은 제외하고 확인한다.
+  const conflicts = useConflicts(draft.date, draft.time, booking.id)
+
+  // 지도는 살짝 스쳐도 역지오코딩이 돌아 주소가 바뀐다.
+  // 그것만으로 '수정했다'고 보면 닫을 때마다 확인창이 떠 성가시다.
+  // 사람이 직접 친 칸이 달라졌을 때만 되묻는다.
+  const typedKeys: (keyof EditDraft)[] = [
+    'customer',
+    'service',
+    'date',
+    'time',
+    'detailAddress',
+  ]
+  const isDirty = typedKeys.some((k) => draft[k] !== initial[k])
 
   /** 고친 내용이 있으면 실수로 닫는 것을 한 번 막는다. */
   const requestClose = useCallback(() => {
@@ -122,6 +135,12 @@ export default function BookingEditModal({
           {error && (
             <div className="mb-6 p-4 bg-[#ff4b4b]/10 border-2 border-[#ff4b4b] rounded-2xl text-[#ff4b4b] text-xs font-black">
               {error}
+            </div>
+          )}
+
+          {conflicts.length > 0 && (
+            <div className="mb-6">
+              <ConflictNotice conflicts={conflicts} />
             </div>
           )}
 

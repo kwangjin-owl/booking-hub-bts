@@ -41,6 +41,8 @@ export default function App() {
   const [highlightId, setHighlightId] = useState<number | null>(null)
   // 대시보드 카드를 눌러 넘어올 때 목록에 걸어둘 필터
   const [listFilter, setListFilter] = useState<StatTarget>('all')
+  // 같은 카드를 다시 눌러도 필터가 걸리도록, 값이 아니라 '누른 횟수'로 신호를 준다.
+  const [filterNonce, setFilterNonce] = useState(0)
 
   /** 세션 하나로 로그인 상태 전체를 갱신하는 단일 진입점 */
   const applySession = useCallback((session: Session | null) => {
@@ -103,6 +105,7 @@ export default function App() {
     setRefreshKey((prev) => prev + 1)
     setListView('목록')
     setListFilter('all')
+    setFilterNonce((n) => n + 1)
     setActiveTab('예약')
 
     // 예약일순으로 정렬되면 새 예약이 목록 중간에 끼어 눈에 안 띈다.
@@ -214,6 +217,7 @@ export default function App() {
               refreshKey={refreshKey}
               onSelect={(target) => {
                 setListFilter(target)
+                setFilterNonce((n) => n + 1)
                 setListView('목록')
                 setActiveTab('예약')
               }}
@@ -266,6 +270,7 @@ export default function App() {
                   isAdmin={isAdmin}
                   highlightId={highlightId}
                   initialFilter={listFilter}
+                  filterNonce={filterNonce}
                 />
               ) : (
                 <CalendarView refreshKey={refreshKey} isAdmin={isAdmin} />
