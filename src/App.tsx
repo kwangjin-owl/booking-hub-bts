@@ -10,7 +10,7 @@ import WeatherCard from './components/WeatherCard'
 import CalendarView from './components/CalendarView'
 import LoginPage from './components/LoginPage'
 
-type TabType = '대시보드' | '예약' | '예약추가'
+type TabType = '대시보드' | '예약' | '예약 추가'
 type ListViewType = '목록' | '캘린더'
 
 /** 구글에서 돌아온 뒤 주소창에 남는 ?code=... / #access_token=... 을 지운다. */
@@ -37,6 +37,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<TabType>('대시보드')
   const [listView, setListView] = useState<ListViewType>('목록')
   const [refreshKey, setRefreshKey] = useState(0)
+  // 방금 등록한 예약. 목록에서 잠시 강조하고 몇 초 뒤 해제한다.
+  const [highlightId, setHighlightId] = useState<number | null>(null)
 
   /** 세션 하나로 로그인 상태 전체를 갱신하는 단일 진입점 */
   const applySession = useCallback((session: Session | null) => {
@@ -95,10 +97,17 @@ export default function App() {
     }
   }, [applySession])
 
-  const handleFormSuccess = () => {
+  const handleFormSuccess = (newId?: number) => {
     setRefreshKey((prev) => prev + 1)
     setListView('목록')
     setActiveTab('예약')
+
+    // 예약일순으로 정렬되면 새 예약이 목록 중간에 끼어 눈에 안 띈다.
+    // 잠깐 초록으로 표시해 어디 들어갔는지 알려준다.
+    if (newId) {
+      setHighlightId(newId)
+      setTimeout(() => setHighlightId(null), 5000)
+    }
   }
 
   const handleLogout = async () => {
@@ -126,7 +135,7 @@ export default function App() {
   const tabs: { id: TabType; label: string }[] = [
     { id: '대시보드', label: '대시보드' },
     { id: '예약', label: isAdmin ? '예약 관리' : '내 예약' },
-    { id: '예약추가', label: '예약추가' },
+    { id: '예약 추가', label: '예약 추가' },
   ]
 
   const listViews: { id: ListViewType; label: string }[] = [
@@ -242,7 +251,7 @@ export default function App() {
 
             <div className="min-h-[720px]">
               {listView === '목록' ? (
-                <BookingTable refreshKey={refreshKey} isAdmin={isAdmin} />
+                <BookingTable refreshKey={refreshKey} isAdmin={isAdmin} highlightId={highlightId} />
               ) : (
                 <CalendarView refreshKey={refreshKey} />
               )}
@@ -250,7 +259,7 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === '예약추가' && (
+        {activeTab === '예약 추가' && (
           <div className="space-y-6">
             <PageHeader
               title="새로운 예약 등록"

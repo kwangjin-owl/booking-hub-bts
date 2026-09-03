@@ -13,16 +13,32 @@ interface Booking {
   status: string
   address?: string | null
   calendar_event_id?: string | null
+  created_at?: string
 }
 
 interface BookingTableProps {
   refreshKey?: number
   isAdmin?: boolean
+  /** 방금 등록한 예약. 목록에서 잠시 강조해 어디 있는지 알려준다. */
+  highlightId?: number | null
 }
 
 type StatusFilter = 'all' | 'pending' | 'confirmed'
+type SortKey = 'date' | 'created'
 
-export default function BookingTable({ refreshKey = 0, isAdmin = false }: BookingTableProps) {
+/** '2026-09-03T07:44:38Z' -> '9/3' */
+function shortDate(iso?: string) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
+
+export default function BookingTable({
+  refreshKey = 0,
+  isAdmin = false,
+  highlightId = null,
+}: BookingTableProps) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -33,6 +49,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
 
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [sortKey, setSortKey] = useState<SortKey>('date')
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -41,7 +58,6 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
       const { data, error } = await supabase
         .from('bookings')
         .select('id, customer, service, date, time, status, address, calendar_event_id, created_at')
-        .order('date', { ascending: true })
 
       if (error) {
         console.error('조회 실패:', error.message, error.code, error.details)
@@ -59,7 +75,7 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
 
-    return bookings.filter((b) => {
+    const filtered = bookings.filter((b) => {
       if (statusFilter !== 'all' && b.status !== statusFilter) return false
       if (!q) return true
 
@@ -68,7 +84,17 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
         .toLowerCase()
         .includes(q)
     })
-  }, [bookings, query, statusFilter])
+
+    return [...filtered].sort((a, b) => {
+      if (sortKey === 'created') {
+        // 최근에 등록한 것부터
+        return (b.created_at ?? '').localeCompare(a.created_at ?? '')
+      }
+      // 예약일이 가까운 것부터. 같은 날이면 이른 시간부터
+      const byDate = a.date.localeCompare(b.date)
+      return byDate !== 0 ? byDate : a.time.localeCompare(b.time)
+    })
+  }, [bookings, query, statusFilter, sortKey])
 
   const counts = useMemo(
     () => ({
@@ -280,6 +306,30 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
         </div>
 
         <div className="flex gap-2 p-1.5 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl w-fit">
+          {(
+            [
+              { id: 'date', label: '예약일순' },
+              { id: 'created', label: '등록순' },
+            ] as { id: SortKey; label: string }[]
+          ).map((s) => {
+            const isActive = sortKey === s.id
+            return (
+              <button
+                key={s.id}
+                onClick={() => setSortKey(s.id)}
+                className={`px-4 py-2 text-xs font-black rounded-xl transition-all cursor-pointer whitespace-nowrap ${
+                  isActive
+                    ? 'bg-white text-[#1cb0f6] border-2 border-[#1cb0f6] shadow-[0_2px_0_#0d99dc]'
+                    : 'bg-transparent text-[#777777] border-2 border-transparent hover:text-[#3c3c3c]'
+                }`}
+              >
+                {s.label}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="flex gap-2 p-1.5 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl w-fit">
           {filters.map((f) => {
             const isActive = statusFilter === f.id
             return (
@@ -339,19 +389,33 @@ export default function BookingTable({ refreshKey = 0, isAdmin = false }: Bookin
                 {visible.map((booking) => {
                   const isBusy = busyId === booking.id
 
+                  const isNew = highlightId === booking.id
+
                   return (
                     <tr
                       key={booking.id}
-                      className="hover:bg-[#f7f7f7]/50 transition-colors align-middle"
+                      className={`transition-colors align-middle ${
+                        isNew ? 'bg-[#d7ffb8]/50' : 'hover:bg-[#f7f7f7]/50'
+                      }`}
                     >
                       <td className="px-4 py-4 font-black text-[#042c60] break-words">
                         {booking.customer}
+                        {isNew && (
+                          <span className="ml-1.5 align-middle text-[10px] font-black text-[#58a700] bg-[#d7ffb8] px-1.5 py-0.5 rounded-full">
+                            NEW
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-4 font-bold text-[#3c3c3c] break-words">
                         {booking.service}
                       </td>
-                      <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
-                        {booking.date}
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <span className="font-bold text-[#777777]">{booking.date}</span>
+                        {booking.created_at && (
+                          <span className="block text-[10px] font-bold text-[#afafaf]">
+                            등록 {shortDate(booking.created_at)}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
                         {booking.time}

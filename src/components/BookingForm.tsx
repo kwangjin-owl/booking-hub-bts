@@ -4,7 +4,8 @@ import LocationPicker from './LocationPicker'
 import TimeSelect from './TimeSelect'
 
 interface BookingFormProps {
-  onSuccess?: () => void
+  /** 방금 만든 예약 id 를 넘겨, 목록에서 그 줄을 강조할 수 있게 한다. */
+  onSuccess?: (newId?: number) => void
 }
 
 export default function BookingForm({ onSuccess }: BookingFormProps) {
@@ -38,7 +39,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       return
     }
 
-    const { error: insertError } = await supabase.from('bookings').insert({
+    const { data: inserted, error: insertError } = await supabase.from('bookings').insert({
       customer,
       service,
       date,
@@ -48,6 +49,8 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       via: 'form',
       user_id: userId,
     })
+      .select('id')
+      .single()
 
     if (insertError) {
       console.error('추가 실패 상세:', {
@@ -67,7 +70,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     setTime('')
     setAddress('')
     setLoading(false)
-    onSuccess?.()
+    onSuccess?.(inserted?.id)
   }
 
   return (
