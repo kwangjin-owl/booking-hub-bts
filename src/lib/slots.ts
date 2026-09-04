@@ -30,15 +30,39 @@ export function isSlot(s: string): s is Slot {
   return (SLOTS as readonly string[]).includes(s)
 }
 
+/**
+ * 하이쿠 작업 때 영어 id 로 저장된 값이 DB 에 남아 있다.
+ * 그대로 두면 화면에 "희망: 없음", "빈 칸 afternoon1 확정" 처럼 나온다.
+ * db/06_normalize_slots.sql 로 한 번 정리하지만, 못 지운 값이 있어도 화면은 맞아야 하므로 여기서도 받아준다.
+ */
+const LEGACY: Record<string, Slot> = {
+  morning: '오전',
+  afternoon1: '오후-1',
+  afternoon2: '오후-2',
+  오전: '오전',
+  '오후1': '오후-1',
+  '오후2': '오후-2',
+}
+
 /** "오전, 오후-1" / "오전+오후-1" 처럼 저장된 문자열을 칸 배열로. 모르는 값은 버린다. */
 export function parseSlots(s: string | null | undefined): Slot[] {
   if (!s) return []
   const out: Slot[] = []
   for (const raw of s.split(/[,+]/)) {
     const v = raw.trim()
-    if (isSlot(v) && !out.includes(v)) out.push(v)
+    const slot = isSlot(v) ? v : LEGACY[v]
+    if (slot && !out.includes(slot)) out.push(slot)
   }
   return out
+}
+
+/** 옛 예약이 남긴 reason·trace 안의 영어 id 도 읽을 수 있게 바꿔 보여준다. */
+export function humanizeSlotText(text: string | null | undefined): string {
+  if (!text) return ''
+  return text
+    .replace(/\bafternoon1\b/g, '오후-1')
+    .replace(/\bafternoon2\b/g, '오후-2')
+    .replace(/\bmorning\b/g, '오전')
 }
 
 /** 저장용. 화면에는 joinSlotsForDisplay 를 쓴다. */
