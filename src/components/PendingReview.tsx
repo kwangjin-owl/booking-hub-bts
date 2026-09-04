@@ -12,6 +12,7 @@ import {
 } from '../lib/slots'
 import DateField from './DateField'
 import { fetchAllBookings, judgeAndSave, readAutoOn } from '../lib/judgeRunner'
+import { syncCalendar } from '../lib/calendarSync'
 import type { BookingRow } from '../lib/types'
 
 interface PendingReviewProps {
@@ -61,17 +62,21 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
     .filter((b) => UNSETTLED.includes((b.decision ?? 'pending') as (typeof UNSETTLED)[number]))
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
 
-  /** 실패하면 메시지를 띄우고, 성공하면 목록을 다시 읽는다. */
+  /**
+   * 실패하면 메시지를 띄운다.
+   * 목록은 성공·실패와 무관하게 다시 읽는다 - 캘린더만 실패하고 판정은 저장된 경우가 있어,
+   * 여기서 안 읽으면 화면이 옛 상태로 남아 같은 걸 또 누르게 된다.
+   */
   const run = async (id: number, work: () => Promise<string>) => {
     setBusyId(id)
     setMessage(null)
     try {
       const text = await work()
-      await reload()
       setMessage({ kind: 'ok', text })
     } catch (err) {
       setMessage({ kind: 'err', text: (err as Error).message })
     } finally {
+      await reload()
       setBusyId(null)
     }
   }
@@ -80,7 +85,8 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
     run(b.id, async () => {
       const fresh = await fetchAllBookings()
       const current = fresh.find((x) => x.id === b.id) ?? b
-      const { result } = await judgeAndSave(current, fresh, readAutoOn())
+      const { result, calendarError } = await judgeAndSave(current, fresh, readAutoOn())
+      if (calendarError) throw new Error(calendarError)
       return `${b.customer}: ${decisionLabel(result.decision)} - ${result.reason}`
     })
 
@@ -100,7 +106,16 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
         })
         .eq('id', b.id)
       if (error) throw new Error(error.message)
-      return `${b.customer} 를 ${joinSlotsForDisplay(cand)} 로 확정했습니다.`
+
+      // 확정됐으니 캘린더에 올린다
+      const sync = await syncCalendar({
+        ...b,
+        decision: 'confirmed_human',
+        slot_assigned: joinSlots(cand),
+      })
+      if (sync.error) throw new Error(sync.error)
+
+      return `${b.customer} 를 ${joinSlotsForDisplay(cand)} 로 확정하고 캘린더에 올렸습니다.`
     })
 
   /**
@@ -160,6 +175,21 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
           .eq('id', loser.id)
         if (e2) throw new Error(e2.message)
       }
+
+      // 이긴 쪽은 캘린더에 올리고, 밀린 쪽은 (일정이 있었다면) 지운다.
+      const errors: string[] = []
+      const w = await syncCalendar({
+        ...winner,
+        decision: 'confirmed_human',
+        slot_assigned: joinSlots(cand),
+      })
+      if (w.error) errors.push(w.error)
+      if (loser) {
+        const l = await syncCalendar({ ...loser, decision: 'pending', slot_assigned: null })
+        if (l.error) errors.push(l.error)
+      }
+      if (errors.length > 0) throw new Error(errors.join(' / '))
+
       return `${winnerName} 로 확정했습니다. ${loserName ?? ''} 는 대기로 돌아갔습니다.`
     })
 
@@ -180,8 +210,9 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
       const fresh = await fetchAllBookings()
       const current = fresh.find((x) => x.id === b.id)
       if (!current) throw new Error('저장한 예약을 다시 찾지 못했습니다.')
-      const { result } = await judgeAndSave(current, fresh, readAutoOn())
+      const { result, calendarError } = await judgeAndSave(current, fresh, readAutoOn())
       setEditingId(null)
+      if (calendarError) throw new Error(calendarError)
       return `${b.customer}: ${decisionLabel(result.decision)} - ${result.reason}`
     })
 

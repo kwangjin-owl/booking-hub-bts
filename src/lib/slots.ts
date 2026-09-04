@@ -11,11 +11,17 @@ export const SLOT_LABELS: Record<Slot, string> = {
   '오후-2': '오후-2 15-17',
 }
 
-/** 구글 캘린더에 올릴 때 칸의 시작 시각. 시간 칸을 없앴으므로 여기서 만든다. */
+/** 구글 캘린더에 올릴 때 칸의 시작·끝 시각. 시간 칸을 없앴으므로 여기서 만든다. */
 export const SLOT_START_TIME: Record<Slot, string> = {
   오전: '10:00',
   '오후-1': '13:00',
   '오후-2': '15:00',
+}
+
+export const SLOT_END_TIME: Record<Slot, string> = {
+  오전: '12:00',
+  '오후-1': '15:00',
+  '오후-2': '17:00',
 }
 
 /** 종류별로 하루에 몇 칸이 필요한가 */
@@ -106,6 +112,24 @@ export function occupied(date: string, bookings: readonly OccupancySource[]): Se
     for (const s of parseSlots(b.slot_assigned)) result.add(s)
   }
   return result
+}
+
+/**
+ * 배정된 칸들을 하나의 시간 덩어리로 만든다.
+ * 첫 칸의 시작부터 마지막 칸의 끝까지. 지방(세 칸)이면 10:00-17:00 한 건이 된다.
+ * 경기가 오전+오후-1 이면 점심시간이 안에 들어가지만, 일정은 한 건으로 잡는 편이 읽기 쉽다.
+ */
+export function slotSpan(
+  slotAssigned: string | null | undefined,
+): { start: string; end: string } | null {
+  const slots = parseSlots(slotAssigned)
+  if (slots.length === 0) return null
+  // 저장 순서가 아니라 시간 순으로 정렬해야 끝 시각이 맞는다.
+  const sorted = [...slots].sort((a, b) => SLOTS.indexOf(a) - SLOTS.indexOf(b))
+  return {
+    start: SLOT_START_TIME[sorted[0]],
+    end: SLOT_END_TIME[sorted[sorted.length - 1]],
+  }
 }
 
 /** 확정된 칸에서 캘린더용 시각을 만든다. 칸이 없으면 기존 time 을 그대로 쓴다. */

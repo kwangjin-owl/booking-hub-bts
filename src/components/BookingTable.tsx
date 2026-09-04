@@ -6,6 +6,8 @@ import MapView from './MapView'
 import { joinSlotsForDisplay, parseSlots, timeFromSlots } from '../lib/slots'
 import { decisionLabel } from '../lib/decisionMeta'
 import { useWeather } from '../lib/useWeather'
+import { syncCalendar } from '../lib/calendarSync'
+import type { BookingRow } from '../lib/types'
 import WeatherBadge from './WeatherBadge'
 
 interface Booking {
@@ -19,6 +21,7 @@ interface Booking {
   slot_assigned?: string | null
   slots_wanted?: string | null
   form?: string | null
+  memo?: string | null
   address?: string | null
   detail_address?: string | null
   calendar_event_id?: string | null
@@ -105,7 +108,7 @@ export default function BookingTable({
       const { data, error } = await supabase
         .from('bookings')
         .select(
-          'id, customer, service, date, time, status, decision, slot_assigned, slots_wanted, form, address, detail_address, calendar_event_id, created_at',
+          'id, customer, service, date, time, status, decision, slot_assigned, slots_wanted, form, memo, address, detail_address, calendar_event_id, created_at',
         )
 
       if (error) {
@@ -275,7 +278,7 @@ export default function BookingTable({
 
     const { error } = await supabase
       .from('bookings')
-      .update({ decision: 'pending' })
+      .update({ decision: 'pending', slot_assigned: null })
       .eq('id', booking.id)
 
     if (error) {
@@ -284,10 +287,46 @@ export default function BookingTable({
       return
     }
 
+    // 확정이 풀렸으므로 캘린더 일정도 지운다.
+    const sync = await syncCalendar({
+      ...(booking as unknown as BookingRow),
+      decision: 'pending',
+      slot_assigned: null,
+    })
+
     setBookings((prev) =>
-      prev.map((b) => (b.id === booking.id ? { ...b, decision: 'pending' } : b)),
+      prev.map((b) =>
+        b.id === booking.id
+          ? { ...b, decision: 'pending', slot_assigned: null, status: 'pending', calendar_event_id: null }
+          : b,
+      ),
     )
-    setMessage({ kind: 'ok', text: '대기 상태로 되돌렸습니다.' })
+    setMessage(
+      sync.error
+        ? { kind: 'err', text: sync.error }
+        : { kind: 'ok', text: '대기로 되돌리고 캘린더 일정도 지웠습니다.' },
+    )
+    setBusyId(null)
+  }
+
+  /** 캘린더 등록이 실패했던 확정 건을 다시 올린다. */
+  const handleCalendarRetry = async (booking: Booking) => {
+    if (!isAdmin) return
+    setBusyId(booking.id)
+    setMessage(null)
+
+    const sync = await syncCalendar(booking as unknown as BookingRow)
+
+    if (sync.patch) {
+      setBookings((prev) =>
+        prev.map((b) => (b.id === booking.id ? { ...b, ...sync.patch } : b)),
+      )
+    }
+    setMessage(
+      sync.error
+        ? { kind: 'err', text: sync.error }
+        : { kind: 'ok', text: '구글 캘린더에 일정을 올렸습니다.' },
+    )
     setBusyId(null)
   }
 
@@ -535,6 +574,10 @@ export default function BookingTable({
                   const isBusy = busyId === booking.id
 
                   const isNew = highlightId === booking.id
+                  // 슬롯 예약은 판정이 캘린더까지 몰고 간다. 상태 버튼으로 따로 바꾸지 않는다.
+                  const isSlotBooking = !!booking.slots_wanted || !!booking.slot_assigned
+                  const isConfirmedDecision =
+                    booking.decision === 'confirmed_auto' || booking.decision === 'confirmed_human'
                   const isPast = booking.date < todayString()
 
                   return (
@@ -615,9 +658,13 @@ export default function BookingTable({
                         <div className="space-y-2">
                           <button
                             onClick={() => handleStatusToggle(booking)}
-                            disabled={!isAdmin || isBusy}
+                            disabled={!isAdmin || isBusy || isSlotBooking}
                             title={
-                              isAdmin ? '클릭해서 상태를 바꿉니다' : '관리자만 변경할 수 있습니다'
+                              isSlotBooking
+                                ? '판정에서 확정되면 구글 캘린더에 자동으로 올라갑니다'
+                                : isAdmin
+                                  ? '클릭해서 상태를 바꿉니다'
+                                  : '관리자만 변경할 수 있습니다'
                             }
                             className={`w-24 py-2 rounded-xl text-xs font-black tracking-wider transition-all shadow-[0_2px_0_rgba(0,0,0,0.12)] ${
                               isAdmin && !isBusy
@@ -640,6 +687,24 @@ export default function BookingTable({
                               판정: {decisionLabel(booking.decision)}
                             </div>
                           )}
+
+                          {/* 확정인데 일정이 없으면 캘린더 등록이 실패한 것이다. 다시 올릴 수 있게 한다. */}
+                          {isConfirmedDecision &&
+                            (booking.calendar_event_id ? (
+                              <div className="text-[10px] font-black text-[#58a700]">
+                                📅 캘린더 등록됨
+                              </div>
+                            ) : (
+                              isAdmin && (
+                                <button
+                                  onClick={() => handleCalendarRetry(booking)}
+                                  disabled={isBusy}
+                                  className="w-full py-1 px-2 rounded-lg text-[11px] font-black text-[#1cb0f6] border-2 border-[#1cb0f6] hover:bg-[#e5f4ff] transition-all cursor-pointer disabled:opacity-50"
+                                >
+                                  캘린더에 올리기
+                                </button>
+                              )
+                            ))}
                           {booking.decision && ['confirmed_auto', 'confirmed_human', 'rejected', 'asking'].includes(booking.decision) && isAdmin && (
                             <button
                               onClick={() => handleDecisionRevert(booking)}

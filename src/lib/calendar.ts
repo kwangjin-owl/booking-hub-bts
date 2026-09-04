@@ -5,6 +5,8 @@ export interface CalendarBooking {
   service: string
   date: string
   time: string
+  /** 끝 시각 'HH:MM'. 없으면 서버가 1시간짜리로 만든다. */
+  endTime?: string
   address?: string | null
 }
 

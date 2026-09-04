@@ -6,6 +6,7 @@
  */
 import { supabase } from '../supabaseClient'
 import { decide, toBookingPatch, type DecideResult } from './decide'
+import { syncCalendar } from './calendarSync'
 import type { BookingRow } from './types'
 
 export const AUTO_JUDGE_KEY = 'auto-judge'
@@ -36,26 +37,39 @@ export async function judgeAndSave(
   booking: BookingRow,
   allBookings: readonly BookingRow[],
   autoOn: boolean,
-): Promise<{ result: DecideResult; row: BookingRow }> {
+): Promise<{ result: DecideResult; row: BookingRow; calendarError?: string }> {
   const result = decide(booking, allBookings, autoOn)
   const patch = toBookingPatch(result)
 
   const { error } = await supabase.from('bookings').update(patch).eq('id', booking.id)
   if (error) throw new Error(error.message)
 
-  return { result, row: { ...booking, ...patch } }
+  // 확정이면 캘린더에 올리고, 확정이 풀렸으면 지운다.
+  // 실패해도 판정은 그대로 둔다 - 일정은 다시 올릴 수 있지만 판정이 사라지면 배정이 꼬인다.
+  const row = { ...booking, ...patch } as BookingRow
+  const sync = await syncCalendar(row)
+
+  return {
+    result,
+    row: { ...row, ...(sync.patch ?? {}) } as BookingRow,
+    calendarError: sync.error,
+  }
 }
 
-/** pending 인 예약을 접수 순서대로 전부 판정한다. 돌린 건수를 돌려준다. */
-export async function judgeAllPending(autoOn: boolean): Promise<number> {
+/** pending 인 예약을 접수 순서대로 전부 판정한다. 돌린 건수와 캘린더 실패를 돌려준다. */
+export async function judgeAllPending(
+  autoOn: boolean,
+): Promise<{ judged: number; calendarErrors: string[] }> {
   let all = await fetchAllBookings()
   const targets = all.filter((b) => b.decision === 'pending').map((b) => b.id)
+  const calendarErrors: string[] = []
 
   for (const id of targets) {
     const current = all.find((b) => b.id === id)
     if (!current) continue
-    const { row } = await judgeAndSave(current, all, autoOn)
+    const { row, calendarError } = await judgeAndSave(current, all, autoOn)
+    if (calendarError) calendarErrors.push(calendarError)
     all = all.map((b) => (b.id === id ? row : b))
   }
-  return targets.length
+  return { judged: targets.length, calendarErrors }
 }

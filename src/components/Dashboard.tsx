@@ -153,8 +153,15 @@ export default function Dashboard({ refreshKey = 0 }: DashboardProps) {
     setJudging(true)
     setNotice(null)
     try {
-      const n = await judgeAllPending(autoOn)
-      setNotice(n === 0 ? '대기 중인 예약이 없습니다.' : `${n}건을 판정했습니다.`)
+      const { judged, calendarErrors } = await judgeAllPending(autoOn)
+      if (judged === 0) {
+        setNotice('대기 중인 예약이 없습니다.')
+      } else if (calendarErrors.length > 0) {
+        // 판정은 됐는데 캘린더만 실패한 경우. 어느 건이 실패했는지 그대로 보여준다.
+        setNotice(`${judged}건 판정 · 캘린더 ${calendarErrors.length}건 실패 — ${calendarErrors[0]}`)
+      } else {
+        setNotice(`${judged}건을 판정했습니다. 확정된 건은 구글 캘린더에 올라갔습니다.`)
+      }
       // realtime 이 꺼져 있어도 화면은 맞아야 한다.
       await reload()
     } catch (err) {

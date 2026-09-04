@@ -121,7 +121,7 @@ export default async function handler(req, res) {
     }
 
     // ---------- 일정 생성 ----------
-    const { customer, service, date, time, address } = booking ?? {}
+    const { customer, service, date, time, endTime, address } = booking ?? {}
     if (!customer || !service || !date || !time) {
       return res.status(400).json({ error: 'customer, service, date, time 은 필수입니다' })
     }
@@ -138,8 +138,20 @@ export default async function handler(req, res) {
         .filter(Boolean)
         .join('\n'),
       start: { dateTime: `${date}T${time}:00`, timeZone: TIME_ZONE },
-      // 기본 1시간. 길이를 바꾸려면 60 을 고친다.
-      end: { dateTime: `${date}T${addMinutes(time, 60)}:00`, timeZone: TIME_ZONE },
+      // 슬롯 예약은 앱이 끝 시각을 같이 보낸다 (오전이면 10:00-12:00).
+      // 옛 예약처럼 안 보내오면 1시간짜리로 만든다.
+      end: {
+        dateTime: `${date}T${endTime && endTime > time ? endTime : addMinutes(time, 60)}:00`,
+        timeZone: TIME_ZONE,
+      },
+      // 하루 전과 한 시간 전에 알림. 캘린더 기본 설정을 무시하고 이 둘만 쓴다.
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 24 * 60 },
+          { method: 'popup', minutes: 60 },
+        ],
+      },
     }
     if (address) event.location = address
 
