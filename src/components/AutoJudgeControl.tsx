@@ -41,7 +41,7 @@ export default function AutoJudgeControl() {
 
         const result = decide(decideBooking, allBookings, autoOn)
 
-        await supabase
+        const { error } = await supabase
           .from('bookings')
           .update({
             decision: result.decision,
@@ -51,6 +51,10 @@ export default function AutoJudgeControl() {
             trace: result.trace.join('\n'),
           })
           .eq('id', booking.id)
+
+        if (error) {
+          console.error(`ID ${booking.id} 업데이트 실패:`, error)
+        }
       }
     } catch (err) {
       console.error('전부 판정 실패:', err)

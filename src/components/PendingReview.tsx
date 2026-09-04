@@ -80,6 +80,7 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
     }
   }
 
+
   const getBadgeColor = (decision: string) => {
     switch (decision) {
       case 'pending':
@@ -140,6 +141,9 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
                 {booking.date} · {booking.kind} · {booking.form}
               </p>
               <p className="text-sm font-bold text-[#777777]">{booking.reason}</p>
+              {booking.slot_assigned && (
+                <p className="text-sm font-black text-[#58cc02]">✓ 확정 칸: {booking.slot_assigned}</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-2">
