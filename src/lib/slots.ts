@@ -1,5 +1,24 @@
-export const SLOTS = ['오전', '오후-1', '오후-2']
+/**
+ * 하루를 세 칸으로 나눈다. 시각 대신 이 칸으로 예약을 잡는다.
+ * 저장할 때는 항상 이 한글 이름 그대로 쓴다 (폼·DB·판정이 같은 문자열을 봐야 한다).
+ */
+export const SLOTS = ['오전', '오후-1', '오후-2'] as const
+export type Slot = (typeof SLOTS)[number]
 
+export const SLOT_LABELS: Record<Slot, string> = {
+  오전: '오전 10-12',
+  '오후-1': '오후-1 13-15',
+  '오후-2': '오후-2 15-17',
+}
+
+/** 구글 캘린더에 올릴 때 칸의 시작 시각. 시간 칸을 없앴으므로 여기서 만든다. */
+export const SLOT_START_TIME: Record<Slot, string> = {
+  오전: '10:00',
+  '오후-1': '13:00',
+  '오후-2': '15:00',
+}
+
+/** 종류별로 하루에 몇 칸이 필요한가 */
 export const NEED: Record<string, number> = {
   서울: 1,
   내부: 1,
@@ -7,44 +26,66 @@ export const NEED: Record<string, number> = {
   지방: 3,
 }
 
-export function requiredSlots(kind: string, wanted: string[]): string[] {
-  const firstWanted = wanted[0]
+export function isSlot(s: string): s is Slot {
+  return (SLOTS as readonly string[]).includes(s)
+}
 
-  if (!firstWanted) return []
-
-  if (kind === '서울' || kind === '내부') {
-    return [firstWanted]
+/** "오전, 오후-1" / "오전+오후-1" 처럼 저장된 문자열을 칸 배열로. 모르는 값은 버린다. */
+export function parseSlots(s: string | null | undefined): Slot[] {
+  if (!s) return []
+  const out: Slot[] = []
+  for (const raw of s.split(/[,+]/)) {
+    const v = raw.trim()
+    if (isSlot(v) && !out.includes(v)) out.push(v)
   }
+  return out
+}
 
+/** 저장용. 화면에는 joinSlotsForDisplay 를 쓴다. */
+export function joinSlots(slots: readonly string[]): string {
+  return slots.join(',')
+}
+
+/** 화면용. "오후-1+오후-2" */
+export function joinSlotsForDisplay(slots: readonly string[]): string {
+  return slots.join('+')
+}
+
+/**
+ * 희망 칸 하나를 골랐을 때 실제로 비어 있어야 하는 칸들.
+ * - 서울·내부: 그 칸 하나
+ * - 경기: 그 칸 + 붙어 있는 한 칸 (오전->오전+오후-1, 오후-1->오후-1+오후-2, 오후-2->오후-1+오후-2)
+ * - 지방: 하루 전부
+ */
+export function requiredSlots(kind: string, wanted: Slot): Slot[] {
+  if (kind === '지방') return [...SLOTS]
   if (kind === '경기') {
-    const idx = SLOTS.indexOf(firstWanted)
-    if (idx === 0) return ['오전', '오후-1']
-    if (idx === 1) return ['오후-1', '오후-2']
-    if (idx === 2) return ['오후-1', '오후-2']
-    return [firstWanted]
+    if (wanted === '오전') return ['오전', '오후-1']
+    return ['오후-1', '오후-2']
   }
-
-  if (kind === '지방') {
-    return SLOTS
-  }
-
-  return [firstWanted]
+  return [wanted]
 }
 
-export interface Booking {
+/** occupied 가 보는 최소 모양 */
+export interface OccupancySource {
   date: string
-  decision: string
-  slot_assigned?: string
+  decision: string | null
+  slot_assigned: string | null
 }
 
-export function occupied(date: string, bookings: Booking[]): Set<string> {
-  const result = new Set<string>()
-  bookings.forEach((b) => {
-    if (b.date === date && (b.decision === 'confirmed_auto' || b.decision === 'confirmed_human')) {
-      if (b.slot_assigned) {
-        b.slot_assigned.split(',').forEach((s) => result.add(s.trim()))
-      }
-    }
-  })
+/** 그 날짜에 확정(자동·수동)된 예약이 차지한 칸의 집합 */
+export function occupied(date: string, bookings: readonly OccupancySource[]): Set<Slot> {
+  const result = new Set<Slot>()
+  for (const b of bookings) {
+    if (b.date !== date) continue
+    if (b.decision !== 'confirmed_auto' && b.decision !== 'confirmed_human') continue
+    for (const s of parseSlots(b.slot_assigned)) result.add(s)
+  }
   return result
+}
+
+/** 확정된 칸에서 캘린더용 시각을 만든다. 칸이 없으면 기존 time 을 그대로 쓴다. */
+export function timeFromSlots(slotAssigned: string | null | undefined, fallback: string): string {
+  const first = parseSlots(slotAssigned)[0]
+  return first ? SLOT_START_TIME[first] : fallback
 }
