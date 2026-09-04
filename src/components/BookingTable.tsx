@@ -11,6 +11,8 @@ interface Booking {
   date: string
   time: string
   status: string
+  decision?: string
+  slot_assigned?: string
   address?: string | null
   detail_address?: string | null
   calendar_event_id?: string | null
@@ -85,7 +87,7 @@ export default function BookingTable({
       const { data, error } = await supabase
         .from('bookings')
         .select(
-          'id, customer, service, date, time, status, address, detail_address, calendar_event_id, created_at',
+          'id, customer, service, date, time, status, decision, slot_assigned, address, detail_address, calendar_event_id, created_at',
         )
 
       if (error) {
@@ -217,6 +219,30 @@ export default function BookingTable({
         ? '확정했습니다. 구글 캘린더에 일정이 등록됐습니다.'
         : '대기 상태로 되돌렸습니다. 캘린더 일정도 삭제했습니다.',
     })
+    setBusyId(null)
+  }
+
+  const handleDecisionRevert = async (booking: Booking) => {
+    if (!isAdmin) return
+
+    setBusyId(booking.id)
+    setMessage(null)
+
+    const { error } = await supabase
+      .from('bookings')
+      .update({ decision: 'pending' })
+      .eq('id', booking.id)
+
+    if (error) {
+      setMessage({ kind: 'err', text: `상태 변경 실패: ${error.message}` })
+      setBusyId(null)
+      return
+    }
+
+    setBookings((prev) =>
+      prev.map((b) => (b.id === booking.id ? { ...b, decision: 'pending' } : b)),
+    )
+    setMessage({ kind: 'ok', text: '대기 상태로 되돌렸습니다.' })
     setBusyId(null)
   }
 
@@ -519,28 +545,44 @@ export default function BookingTable({
                         )}
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <button
-                          onClick={() => handleStatusToggle(booking)}
-                          disabled={!isAdmin || isBusy}
-                          title={
-                            isAdmin ? '클릭해서 상태를 바꿉니다' : '관리자만 변경할 수 있습니다'
-                          }
-                          className={`w-24 py-2 rounded-xl text-xs font-black tracking-wider transition-all shadow-[0_2px_0_rgba(0,0,0,0.12)] ${
-                            isAdmin && !isBusy
-                              ? 'cursor-pointer active:translate-y-[2px] active:shadow-none'
-                              : 'cursor-default opacity-70'
-                          } ${
-                            booking.status === 'pending'
-                              ? 'bg-[#ffc800] text-[#042c60]'
-                              : 'bg-[#58cc02] text-white'
-                          }`}
-                        >
-                          {isBusy
-                            ? '처리 중'
-                            : booking.status === 'pending'
-                              ? '대기 중'
-                              : '확정 완료'}
-                        </button>
+                        <div className="space-y-2">
+                          <button
+                            onClick={() => handleStatusToggle(booking)}
+                            disabled={!isAdmin || isBusy}
+                            title={
+                              isAdmin ? '클릭해서 상태를 바꿉니다' : '관리자만 변경할 수 있습니다'
+                            }
+                            className={`w-24 py-2 rounded-xl text-xs font-black tracking-wider transition-all shadow-[0_2px_0_rgba(0,0,0,0.12)] ${
+                              isAdmin && !isBusy
+                                ? 'cursor-pointer active:translate-y-[2px] active:shadow-none'
+                                : 'cursor-default opacity-70'
+                            } ${
+                              booking.status === 'pending'
+                                ? 'bg-[#ffc800] text-[#042c60]'
+                                : 'bg-[#58cc02] text-white'
+                            }`}
+                          >
+                            {isBusy
+                              ? '처리 중'
+                              : booking.status === 'pending'
+                                ? '대기 중'
+                                : '확정 완료'}
+                          </button>
+                          {booking.decision && (
+                            <div className="text-xs font-bold text-[#555555]">
+                              판정: {booking.decision}
+                            </div>
+                          )}
+                          {booking.decision && ['confirmed_auto', 'confirmed_human'].includes(booking.decision) && isAdmin && (
+                            <button
+                              onClick={() => handleDecisionRevert(booking)}
+                              disabled={isBusy}
+                              className="w-full py-1 px-2 rounded-lg text-xs font-black text-[#ff4b4b] border-2 border-[#ff4b4b] hover:bg-[#ff4b4b]/10 transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              판정 취소
+                            </button>
+                          )}
+                        </div>
                       </td>
                       {isAdmin && (
                         <td className="px-4 py-4">
