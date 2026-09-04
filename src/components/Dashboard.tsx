@@ -178,8 +178,30 @@ export default function Dashboard({ refreshKey = 0 }: DashboardProps) {
     if (isDecision(d)) counts[d] += 1
   }
 
+  // 오늘 이후로 잡힌 예약 중 아직 사람 손이 필요한 것
+  const today = new Date()
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const needsAttention = bookings.filter(
+    (b) =>
+      b.date >= todayStr &&
+      (b.decision === 'review' || b.decision === 'rejected' || b.decision === 'asking'),
+  ).length
+
+  const summary: { label: string; n: number; cls: string }[] = [
+    { label: '전체', n: bookings.length, cls: 'bg-[#3c3c3c] text-white' },
+    { label: '대기', n: counts.pending, cls: 'bg-[#e5e5e5] text-[#3c3c3c]' },
+    {
+      label: '확정',
+      n: counts.confirmed_auto + counts.confirmed_human,
+      cls: 'bg-[#58cc02] text-white',
+    },
+    { label: '검토', n: counts.review, cls: 'bg-[#ffc800] text-[#042c60]' },
+    { label: '기각', n: counts.rejected, cls: 'bg-[#ff4b4b] text-white' },
+    { label: '질문', n: counts.asking, cls: 'bg-[#1cb0f6] text-white' },
+  ]
+
   return (
-    <div className="space-y-6 font-['Pretendard',sans-serif]">
+    <div className="space-y-5 font-['Pretendard',sans-serif]">
       <AutoJudgeControl
         autoOn={autoOn}
         onToggle={setAutoOn}
@@ -193,8 +215,33 @@ export default function Dashboard({ refreshKey = 0 }: DashboardProps) {
         </div>
       )}
 
-      <WorkflowGraph counts={counts} activeEdges={activeEdges} pulseKey={pulseKey} />
-      <DecisionLog entries={log} />
+      {/* 숫자를 맨 위에 한 줄로. 그래프까지 안 내려가도 현황이 보인다. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {summary.map((s) => (
+          <span
+            key={s.label}
+            className={`px-3 py-1.5 rounded-xl text-xs font-black tabular-nums ${s.cls}`}
+          >
+            {s.label} {s.n}
+          </span>
+        ))}
+        <span
+          className={`ml-auto px-3 py-1.5 rounded-xl text-xs font-black border-2 ${
+            needsAttention > 0
+              ? 'bg-white border-[#ff4b4b] text-[#ff4b4b]'
+              : 'bg-white border-[#e5e5e5] text-[#afafaf]'
+          }`}
+        >
+          {needsAttention > 0 ? `사람이 볼 것 ${needsAttention}건` : '사람이 볼 것 없음'}
+        </span>
+      </div>
+
+      {/* 넓은 화면에서는 흐름도와 로그를 나란히 둔다. 상태 보드가 스크롤 없이 보이게 하려는 것이다. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_1fr] gap-5 items-start">
+        <WorkflowGraph counts={counts} activeEdges={activeEdges} pulseKey={pulseKey} />
+        <DecisionLog entries={log} />
+      </div>
+
       <StatusBoard bookings={bookings} />
     </div>
   )

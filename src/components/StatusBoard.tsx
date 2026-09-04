@@ -1,5 +1,5 @@
 import { DECISION_LABELS } from '../lib/decisionMeta'
-import { joinSlotsForDisplay, parseSlots } from '../lib/slots'
+import { humanizeSlotText, joinSlotsForDisplay, parseSlots } from '../lib/slots'
 import type { BookingRow, Decision } from '../lib/types'
 
 interface StatusBoardProps {
@@ -44,7 +44,7 @@ export default function StatusBoard({ bookings }: StatusBoardProps) {
         {COLUMNS.map((col) => {
           const items = grouped[col.key]
           return (
-            <div key={col.key} className={`${col.bg} border-2 ${col.border} rounded-2xl p-3 min-h-[280px] flex flex-col`}>
+            <div key={col.key} className={`${col.bg} border-2 ${col.border} rounded-2xl p-3 min-h-[170px] flex flex-col`}>
               <div className="mb-3 pb-2 border-b-2 border-black/5 flex items-baseline justify-between">
                 <h4 className="font-black text-sm text-[#042c60]">{DECISION_LABELS[col.key]}</h4>
                 <span className="text-xs font-black text-[#777777]">{items.length}</span>
@@ -67,7 +67,9 @@ export default function StatusBoard({ bookings }: StatusBoardProps) {
                           <p className="text-[11px] font-black text-[#58a700] mt-1">✓ {joinSlotsForDisplay(assigned)}</p>
                         ) : (
                           b.reason && (
-                            <p className="text-[11px] text-[#777777] font-bold mt-1 line-clamp-2">{b.reason}</p>
+                            <p className="text-[11px] text-[#777777] font-bold mt-1 line-clamp-2">
+                              {humanizeSlotText(b.reason)}
+                            </p>
                           )
                         )}
                         {col.key === 'review' && b.options && (

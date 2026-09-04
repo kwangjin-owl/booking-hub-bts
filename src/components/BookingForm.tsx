@@ -5,6 +5,8 @@ import { isAdminEmail } from '../lib/auth'
 import { SLOTS, SLOT_LABELS, joinSlots, type Slot } from '../lib/slots'
 import { judgeAndSave, fetchAllBookings, readAutoOn } from '../lib/judgeRunner'
 import type { BookingRow } from '../lib/types'
+import LocationPicker from './LocationPicker'
+import DateField from './DateField'
 
 interface BookingFormProps {
   onSuccess?: (newId?: number) => void
@@ -23,11 +25,15 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
   const [form, setForm] = useState('')
   const [memo, setMemo] = useState('')
   const [address, setAddress] = useState('')
+  // 지도는 건물까지만 안다. 층·호수는 따로 받아 detail_address 에 넣는다.
+  const [detailAddress, setDetailAddress] = useState('')
   const [date, setDate] = useState('')
   // 체크한 순서가 곧 우선순위다. 배열 순서를 그대로 저장한다.
   const [slotsWanted, setSlotsWanted] = useState<Slot[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  // 온라인일 때 지도를 굳이 펼칠지
+  const [showMap, setShowMap] = useState(false)
 
   const judgement = judge({ customer, kind, form, memo, address, date, slotsWanted })
 
@@ -62,6 +68,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
         form,
         memo: trimmedMemo || null,
         address: address.trim() || null,
+        detail_address: detailAddress.trim() || null,
         date,
         slots_wanted: joinSlots(slotsWanted),
         // 시간 칸은 없앴다. not null 이라 빈 문자열을 넣는다.
@@ -101,6 +108,7 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
     setForm('')
     setMemo('')
     setAddress('')
+    setDetailAddress('')
     setDate('')
     setSlotsWanted([])
     setLoading(false)
@@ -189,25 +197,32 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
           />
         </div>
 
+        {/* 온라인이면 지도가 필요 없다. 접었다 펼 수 있게 둔다. */}
         <div>
-          <label className={labelClass}>위치 {form === '외근' ? '*' : '(온라인이면 비워도 됩니다)'}</label>
-          <input
-            type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            className={inputClass}
-            placeholder={form === '온라인' ? '온라인 - 비워도 됩니다' : '방문할 주소'}
-          />
+          <label className={labelClass}>
+            위치 {form === '외근' ? '*' : '(온라인이면 비워도 됩니다)'}
+          </label>
+          {form === '온라인' && !showMap ? (
+            <button
+              type="button"
+              onClick={() => setShowMap(true)}
+              className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-dashed border-[#e5e5e5] rounded-2xl font-bold text-[#777777] hover:border-[#1cb0f6] hover:text-[#1cb0f6] transition-all cursor-pointer text-sm"
+            >
+              {address ? `📍 ${address}` : '온라인 예약입니다 · 눌러서 지도로 위치 넣기'}
+            </button>
+          ) : (
+            <LocationPicker
+              value={address}
+              onChange={setAddress}
+              detail={detailAddress}
+              onDetailChange={setDetailAddress}
+            />
+          )}
         </div>
 
         <div>
           <label className={labelClass}>날짜 *</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className={inputClass}
-          />
+          <DateField value={date} onChange={setDate} className={inputClass} />
         </div>
 
         <div>

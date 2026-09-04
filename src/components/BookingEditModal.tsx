@@ -3,6 +3,8 @@ import LocationPicker from './LocationPicker'
 import ConflictNotice from './ConflictNotice'
 import { useConflicts } from '../lib/useConflicts'
 import TimeSelect from './TimeSelect'
+import DateField from './DateField'
+import { joinSlotsForDisplay, parseSlots } from '../lib/slots'
 
 export interface EditableBooking {
   id: number
@@ -13,6 +15,8 @@ export interface EditableBooking {
   address?: string | null
   detail_address?: string | null
   status: string
+  slots_wanted?: string | null
+  slot_assigned?: string | null
 }
 
 export interface EditDraft {
@@ -49,7 +53,13 @@ export default function BookingEditModal({
   const [draft, setDraft] = useState<EditDraft>(initial)
   const [error, setError] = useState('')
 
+  // 슬롯으로 잡은 예약인지. 이 경우 시간 칸 대신 배정된 칸을 보여준다.
+  const wanted = parseSlots(booking.slots_wanted)
+  const assigned = parseSlots(booking.slot_assigned)
+  const isSlotBooking = wanted.length > 0 || assigned.length > 0
+
   // 시간을 옮기다 남의 예약과 겹칠 수 있다. 자기 자신은 제외하고 확인한다.
+  // 옛 시간 모델 예약에만 의미가 있다. 슬롯 예약은 판정이 겹침을 본다.
   const conflicts = useConflicts(draft.date, draft.time, booking.id)
 
   // 지도는 살짝 스쳐도 역지오코딩이 돌아 주소가 바뀐다.
@@ -86,8 +96,13 @@ export default function BookingEditModal({
   }, [requestClose])
 
   const handleSave = () => {
-    if (!draft.customer || !draft.service || !draft.date || !draft.time) {
-      setError('고객사, 서비스, 날짜, 시간은 비울 수 없습니다.')
+    if (!draft.customer || !draft.service || !draft.date) {
+      setError('고객사, 서비스, 날짜는 비울 수 없습니다.')
+      return
+    }
+    // 슬롯 모델 예약에는 시간 칸이 없다. 옛 예약만 시간을 요구한다.
+    if (!isSlotBooking && !draft.time) {
+      setError('시간을 골라 주세요.')
       return
     }
     setError('')
@@ -138,7 +153,7 @@ export default function BookingEditModal({
             </div>
           )}
 
-          {conflicts.length > 0 && (
+          {!isSlotBooking && conflicts.length > 0 && (
             <div className="mb-6">
               <ConflictNotice conflicts={conflicts} />
             </div>
@@ -165,20 +180,29 @@ export default function BookingEditModal({
 
             <div>
               <label className={labelClass}>날짜 *</label>
-              <input
-                type="date"
+              <DateField
                 className={inputClass}
                 value={draft.date}
-                onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+                onChange={(date) => setDraft({ ...draft, date })}
               />
             </div>
 
             <div>
-              <label className={labelClass}>시간 *</label>
-              <TimeSelect
-                value={draft.time}
-                onChange={(time) => setDraft({ ...draft, time })}
-              />
+              <label className={labelClass}>{isSlotBooking ? '슬롯' : '시간 *'}</label>
+              {isSlotBooking ? (
+                <div className="px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl text-sm font-bold text-[#3c3c3c]">
+                  {assigned.length > 0 ? (
+                    <span className="text-[#58a700]">✓ {joinSlotsForDisplay(assigned)}</span>
+                  ) : (
+                    <span className="text-[#777777]">희망 {wanted.join(' > ')}</span>
+                  )}
+                  <p className="text-[11px] text-[#afafaf] font-bold mt-1">
+                    칸 배정은 미확정 관리 탭에서 바꿉니다
+                  </p>
+                </div>
+              ) : (
+                <TimeSelect value={draft.time} onChange={(time) => setDraft({ ...draft, time })} />
+              )}
             </div>
 
             {/* 예약추가 폼과 같은 주소 선택기를 쓴다 */}

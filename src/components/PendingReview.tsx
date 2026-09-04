@@ -1,8 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { candidatesFor, occupiedExcept } from '../lib/decide'
 import { decisionBadge, decisionLabel } from '../lib/decisionMeta'
-import { SLOTS, joinSlots, joinSlotsForDisplay, parseSlots, type Slot } from '../lib/slots'
+import {
+  SLOTS,
+  humanizeSlotText,
+  joinSlots,
+  joinSlotsForDisplay,
+  parseSlots,
+  type Slot,
+} from '../lib/slots'
+import DateField from './DateField'
 import { fetchAllBookings, judgeAndSave, readAutoOn } from '../lib/judgeRunner'
 import type { BookingRow } from '../lib/types'
 
@@ -210,7 +218,13 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border-2 border-[#e5e5e5] shadow-[0_4px_0_#e5e5e5] overflow-hidden">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-fixed">
+            <colgroup>
+              <col className="w-[38%]" />
+              <col className="w-[12%]" />
+              <col className="w-[34%]" />
+              <col className="w-[16%]" />
+            </colgroup>
             <thead className="bg-[#f7f7f7] border-b-2 border-[#e5e5e5] text-xs font-black uppercase tracking-wider text-[#777777]">
               <tr>
                 <th className="px-4 py-3 text-left">예약</th>
@@ -223,12 +237,14 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
               {unsettled.map((b) => {
                 const isBusy = busyId === b.id
                 const isEditing = editingId === b.id
+                const isOpen = openTrace.has(b.id)
                 const decision = b.decision ?? 'pending'
                 const traceLines = (b.trace ?? '').split('\n').filter(Boolean)
                 const optionNames = (b.options ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 
                 return (
-                  <tr key={b.id} className="align-top">
+                  <Fragment key={b.id}>
+                  <tr className="align-top">
                     <td className="px-4 py-4">
                       <p className="font-black text-[#042c60]">{b.customer}</p>
                       <p className="text-xs font-bold text-[#777777] mt-0.5">
@@ -257,10 +273,9 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
                               </option>
                             ))}
                           </select>
-                          <input
-                            type="date"
+                          <DateField
                             value={draft.date}
-                            onChange={(e) => setDraft({ ...draft, date: e.target.value })}
+                            onChange={(d) => setDraft({ ...draft, date: d })}
                             className="w-full px-2 py-1.5 text-xs font-bold border-2 border-[#e5e5e5] rounded-lg bg-white"
                           />
                           <div className="flex gap-3 flex-wrap">
@@ -295,17 +310,8 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
                         onClick={() => toggleTrace(b.id)}
                         className="mt-2 text-xs font-bold text-[#1cb0f6] hover:underline cursor-pointer"
                       >
-                        {openTrace.has(b.id) ? '▼ 과정 닫기' : '▶ 과정 보기'}
+                        {isOpen ? '▼ 과정 닫기' : '▶ 과정 보기'}
                       </button>
-                      {openTrace.has(b.id) && (
-                        <ol className="mt-1 ml-4 list-decimal text-xs font-bold text-[#555555] space-y-0.5">
-                          {traceLines.length === 0 ? (
-                            <li className="list-none -ml-4 text-[#afafaf]">아직 판정하지 않았습니다</li>
-                          ) : (
-                            traceLines.map((line, i) => <li key={i}>{line}</li>)
-                          )}
-                        </ol>
-                      )}
                     </td>
 
                     <td className="px-4 py-4 whitespace-nowrap">
@@ -315,7 +321,7 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
                     </td>
 
                     <td className="px-4 py-4 text-xs font-bold text-[#555555]">
-                      <p>{b.reason ?? <span className="text-[#afafaf]">아직 판정 전</span>}</p>
+                      <p>{b.reason ? humanizeSlotText(b.reason) : <span className="text-[#afafaf]">아직 판정 전</span>}</p>
                       {decision === 'rejected' && optionNames.length > 0 && (
                         <p className="text-[#777777] mt-1">그 날 빈 칸: {optionNames.join(', ')}</p>
                       )}
@@ -386,6 +392,25 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
                       </div>
                     </td>
                   </tr>
+
+                  {/* 과정은 셀 안이 아니라 아래 한 줄 전체에 편다.
+                      셀 안에 넣으면 글이 길어질 때 열 폭이 늘어나 표가 옆으로 밀린다. */}
+                  {isOpen && (
+                    <tr className="bg-[#f7f7f7]">
+                      <td colSpan={4} className="px-4 py-3">
+                        {traceLines.length === 0 ? (
+                          <p className="text-xs font-bold text-[#afafaf]">아직 판정하지 않았습니다</p>
+                        ) : (
+                          <ol className="list-decimal ml-5 text-xs font-bold text-[#555555] space-y-1">
+                            {traceLines.map((line, i) => (
+                              <li key={i}>{humanizeSlotText(line)}</li>
+                            ))}
+                          </ol>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 )
               })}
             </tbody>

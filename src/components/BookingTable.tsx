@@ -529,8 +529,11 @@ export default function BookingTable({
                           </span>
                         )}
                       </td>
+                      {/* 메모가 통째로 들어와 길어질 수 있다. 두 줄까지만 보여주고 나머지는 툴팁으로. */}
                       <td className="px-4 py-4 font-bold text-[#3c3c3c] break-words">
-                        {booking.service}
+                        <span className="line-clamp-2" title={booking.service}>
+                          {booking.service}
+                        </span>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap">
                         <span className="font-bold text-[#777777]">{booking.date}</span>
@@ -543,10 +546,20 @@ export default function BookingTable({
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-4 font-bold whitespace-nowrap">
+                      {/* 칸이 셋 다 잡히면 '오전+오후-1+오후-2' 라 길다.
+                          nowrap 이면 옆 열 위로 넘쳐 흐른다. 줄바꿈을 허용한다. */}
+                      <td className="px-4 py-4 font-bold align-middle">
                         {(() => {
                           const c = slotCell(booking)
-                          return <span className={c.muted ? 'text-[#afafaf]' : 'text-[#58a700]'}>{c.text}</span>
+                          return (
+                            <span
+                              className={`text-xs leading-snug break-keep ${
+                                c.muted ? 'text-[#afafaf]' : 'text-[#58a700]'
+                              }`}
+                            >
+                              {c.text}
+                            </span>
+                          )
                         })()}
                       </td>
                       <td className="px-4 py-4 font-medium">
