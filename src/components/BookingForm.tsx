@@ -1,101 +1,120 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
-import LocationPicker from './LocationPicker'
-import ConflictNotice from './ConflictNotice'
-import { useConflicts } from '../lib/useConflicts'
-import TimeSelect from './TimeSelect'
+import { judge } from '../lib/judge'
+import AddressSearch from './AddressSearch'
 
 interface BookingFormProps {
-  /** 방금 만든 예약 id 를 넘겨, 목록에서 그 줄을 강조할 수 있게 한다. */
   onSuccess?: (newId?: number) => void
 }
 
+const SLOTS = [
+  { id: 'morning', label: '오전 10-12' },
+  { id: 'afternoon1', label: '오후-1 13-15' },
+  { id: 'afternoon2', label: '오후-2 15-17' },
+]
+
 export default function BookingForm({ onSuccess }: BookingFormProps) {
   const [customer, setCustomer] = useState('')
-  const [service, setService] = useState('')
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
+  const [kind, setKind] = useState('')
+  const [form, setForm] = useState('')
+  const [memo, setMemo] = useState('')
   const [address, setAddress] = useState('')
-  const [detailAddress, setDetailAddress] = useState('')
+  const [date, setDate] = useState('')
+  const [slotsWanted, setSlotsWanted] = useState<string[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // 겹치는 예약은 DB 함수로 확인한다. 화면에서 직접 조회하면 자기 것만 보인다.
-  const conflicts = useConflicts(date, time)
+  const judgement = judge({ customer, kind, form, memo, address, date, slotsWanted })
+  const slotPriority: Record<string, number> = slotsWanted.reduce<Record<string, number>>(
+    (acc, slot) => {
+      acc[slot] = (acc[slot] || 0) + 1
+      return acc
+    },
+    { morning: 0, afternoon1: 0, afternoon2: 0 }
+  )
+
+  const toggleSlot = (slotId: string) => {
+    if (slotsWanted.includes(slotId)) {
+      setSlotsWanted(slotsWanted.filter((s) => s !== slotId))
+    } else {
+      setSlotsWanted([...slotsWanted, slotId])
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    // 필수 칸 검증
-    if (!customer || !service || !date || !time) {
-      setError('모든 필수 칸을 입력해주세요')
+    if (judgement.route === 'ask') {
+      setError(judgement.message)
       return
     }
 
     setLoading(true)
 
-    // RLS 의 insert 정책이 user_id = auth.uid() 를 요구한다.
-    const { data: sessionData } = await supabase.auth.getSession()
-    const userId = sessionData?.session?.user?.id
+    const slotsString = slotsWanted.join(',')
+    const service = memo
 
-    if (!userId) {
-      setError('로그인이 만료됐습니다. 다시 로그인해 주세요.')
-      setLoading(false)
-      return
-    }
-
-    const { data: inserted, error: insertError } = await supabase.from('bookings').insert({
-      customer,
-      service,
-      date,
-      time,
-      address: address || null,
-      detail_address: detailAddress || null,
-      status: 'pending',
-      via: 'form',
-      user_id: userId,
-    })
-      .select('id')
-      .single()
+    const { data, error: insertError } = await supabase
+      .from('bookings')
+      .insert({
+        customer,
+        kind,
+        form,
+        memo,
+        address: address || null,
+        date,
+        slots_wanted: slotsString,
+        service,
+        decision: 'pending',
+        status: 'pending',
+        time: '',
+        via: 'form',
+      })
+      .select()
 
     if (insertError) {
-      console.error('추가 실패 상세:', {
-        message: insertError.message,
-        code: insertError.code,
-        details: insertError.details,
-      })
+      console.error('예약 추가 실패:', insertError)
       setError(`예약 추가 실패: ${insertError.message}`)
       setLoading(false)
       return
     }
 
-    // 성공
     setCustomer('')
-    setService('')
-    setDate('')
-    setTime('')
+    setKind('')
+    setForm('')
+    setMemo('')
     setAddress('')
-    setDetailAddress('')
+    setDate('')
+    setSlotsWanted([])
     setLoading(false)
-    onSuccess?.(inserted?.id)
+    onSuccess?.(data?.[0]?.id)
   }
 
   return (
     <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_8px_0_#e5e5e5] mb-8 relative z-30 font-['Pretendard',sans-serif]">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-2xl bg-[#58cc02] flex items-center justify-center text-white text-xl font-black shadow-[0_3px_0_#46a302]">
+          📝
+        </div>
+        <div>
+          <h2 className="text-2xl font-black text-[#042c60]">새로운 예약</h2>
+          <p className="text-xs text-[#777777] font-bold">필수 정보를 입력하여 예약을 등록하세요</p>
+        </div>
+      </div>
+
       {error && (
-        <div className="mb-6 p-4 bg-[#ff4b4b]/10 border-2 border-[#ff4b4b] rounded-2xl text-[#ff4b4b] text-xs font-black">
+        <div className={`mb-6 p-4 border-2 rounded-2xl text-xs font-black ${
+          judgement.route === 'ask'
+            ? 'bg-[#1cb0f6]/10 border-[#1cb0f6] text-[#1cb0f6]'
+            : 'bg-[#ff4b4b]/10 border-[#ff4b4b] text-[#ff4b4b]'
+        }`}>
           {error}
         </div>
       )}
 
-      {conflicts.length > 0 && (
-        <div className="mb-6">
-          <ConflictNotice conflicts={conflicts} />
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 relative">
+      <div className="space-y-6">
+        {/* 고객사 */}
         <div>
           <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">고객사 *</label>
           <input
@@ -107,17 +126,57 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
           />
         </div>
 
+        {/* 종류 */}
         <div>
-          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">서비스 *</label>
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">종류 *</label>
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value)}
+            className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
+          >
+            <option value="">선택하세요</option>
+            <option value="서울">서울</option>
+            <option value="경기">경기</option>
+            <option value="지방">지방</option>
+            <option value="내부">내부</option>
+          </select>
+        </div>
+
+        {/* 형태 */}
+        <div>
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">형태 *</label>
+          <select
+            value={form}
+            onChange={(e) => setForm(e.target.value)}
+            className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
+          >
+            <option value="">선택하세요</option>
+            <option value="외근">외근</option>
+            <option value="온라인">온라인</option>
+          </select>
+        </div>
+
+        {/* 메모 */}
+        <div>
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">메모 *</label>
           <input
             type="text"
-            value={service}
-            onChange={(e) => setService(e.target.value)}
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
             className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-2xl font-bold text-[#3c3c3c] focus:outline-none focus:border-[#1cb0f6] focus:bg-white transition-all"
-            placeholder="서비스 유형"
+            placeholder="미팅, 기획 회의 등"
           />
         </div>
 
+        {/* 위치 */}
+        <div className="relative z-20">
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">
+            위치 {form === '외근' && '*'}
+          </label>
+          <AddressSearch value={address} onChange={setAddress} onSelect={() => {}} />
+        </div>
+
+        {/* 날짜 */}
         <div>
           <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">날짜 *</label>
           <input
@@ -128,26 +187,38 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
           />
         </div>
 
+        {/* 희망 슬롯 */}
         <div>
-          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">시간 *</label>
-          <TimeSelect value={time} onChange={setTime} />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-2 tracking-wider">주소</label>
-          <LocationPicker
-            value={address}
-            onChange={setAddress}
-            detail={detailAddress}
-            onDetailChange={setDetailAddress}
-          />
+          <label className="block text-xs font-black uppercase text-[#3c3c3c] mb-3 tracking-wider">희망 슬롯 *</label>
+          <div className="space-y-2">
+            {SLOTS.map((slot) => (
+              <label key={slot.id} className="flex items-center gap-3 cursor-pointer p-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-xl hover:bg-white transition-all">
+                <input
+                  type="checkbox"
+                  checked={slotsWanted.includes(slot.id)}
+                  onChange={() => toggleSlot(slot.id)}
+                  className="w-5 h-5"
+                />
+                <span className="flex-1 font-bold text-[#3c3c3c]">{slot.label}</span>
+                {slotPriority[slot.id as keyof typeof slotPriority] > 0 && (
+                  <span className="bg-[#58cc02] text-white text-xs font-black px-2 py-1 rounded-full">
+                    {slotPriority[slot.id as keyof typeof slotPriority]}
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
         </div>
       </div>
 
       <button
         type="submit"
-        disabled={loading}
-        className="w-full bg-[#58cc02] hover:bg-[#46a302] disabled:bg-gray-300 text-white font-black py-4 px-6 rounded-2xl transition-all uppercase tracking-wider text-sm shadow-[0_4px_0_#46a302] active:translate-y-[4px] active:shadow-none cursor-pointer"
+        disabled={loading || judgement.route === 'ask'}
+        className={`w-full mt-8 font-black py-4 px-6 rounded-2xl transition-all uppercase tracking-wider text-sm shadow-[0_4px_0_#46a302] active:translate-y-[4px] active:shadow-none cursor-pointer ${
+          judgement.route === 'book'
+            ? 'bg-[#58cc02] hover:bg-[#46a302] text-white'
+            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+        }`}
       >
         {loading ? '예약 처리 중...' : '예약하기'}
       </button>
