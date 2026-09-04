@@ -10,10 +10,7 @@ import WeatherCard from './components/WeatherCard'
 import CalendarView from './components/CalendarView'
 import PendingReview from './components/PendingReview'
 import LoginPage from './components/LoginPage'
-import AutoJudgeControl from './components/AutoJudgeControl'
-import WorkflowGraph from './components/WorkflowGraph'
-import DecisionLog from './components/DecisionLog'
-import StatusBoard from './components/StatusBoard'
+import Dashboard from './components/Dashboard'
 
 type TabType = '대시보드' | '예약' | '예약 추가' | '미확정 관리'
 type ListViewType = '목록' | '캘린더'
@@ -215,17 +212,12 @@ export default function App() {
               title="대시보드"
               description={
                 isAdmin
-                  ? '전체 예약 현황을 한눈에 확인하고 관리하세요.'
+                  ? '판정 흐름과 상태 보드를 실시간으로 봅니다. 자동 판정을 끄면 후보만 잡고 확정은 사람이 합니다.'
                   : '등록한 예약은 관리자가 확인 후 확정합니다.'
               }
             />
             {isAdmin ? (
-              <>
-                <AutoJudgeControl />
-                <WorkflowGraph refreshKey={refreshKey} />
-                <DecisionLog />
-                <StatusBoard />
-              </>
+              <Dashboard refreshKey={refreshKey} />
             ) : (
               <>
                 <StatCards

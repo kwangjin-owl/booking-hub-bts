@@ -1,144 +1,83 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../supabaseClient'
+import { DECISION_LABELS } from '../lib/decisionMeta'
+import { joinSlotsForDisplay, parseSlots } from '../lib/slots'
+import type { BookingRow, Decision } from '../lib/types'
 
-interface Booking {
-  id: number
-  customer: string
-  date: string
-  kind: string
-  form: string
-  memo: string
-  decision: string
-  slot_assigned?: string
-  reason?: string
-  options?: string
+interface StatusBoardProps {
+  bookings: BookingRow[]
 }
 
-export default function StatusBoard() {
-  const [bookings, setBookings] = useState<Record<string, Booking[]>>({
+const COLUMNS: { key: Decision; bg: string; border: string }[] = [
+  { key: 'pending', bg: 'bg-[#f7f7f7]', border: 'border-[#cfcfcf]' },
+  { key: 'confirmed_auto', bg: 'bg-[#d7ffb8]/50', border: 'border-[#58cc02]' },
+  { key: 'confirmed_human', bg: 'bg-white', border: 'border-[#58cc02]' },
+  { key: 'review', bg: 'bg-[#fff8e6]', border: 'border-[#ffc800]' },
+  { key: 'rejected', bg: 'bg-[#ffebeb]', border: 'border-[#ff4b4b]' },
+  { key: 'asking', bg: 'bg-[#e6f4ff]', border: 'border-[#1cb0f6]' },
+]
+
+/** 상태별 여섯 칸. 데이터는 Dashboard 가 realtime 으로 갱신해 준다. */
+export default function StatusBoard({ bookings }: StatusBoardProps) {
+  const grouped: Record<Decision, BookingRow[]> = {
     pending: [],
     confirmed_auto: [],
     confirmed_human: [],
     review: [],
     rejected: [],
     asking: [],
-  })
-
-  useEffect(() => {
-    const fetchBookings = async () => {
-      const { data } = await supabase.from('bookings').select('*')
-
-      if (data) {
-        const grouped: Record<string, Booking[]> = {
-          pending: [],
-          confirmed_auto: [],
-          confirmed_human: [],
-          review: [],
-          rejected: [],
-          asking: [],
-        }
-
-        data.forEach((b) => {
-          if (grouped[b.decision]) {
-            grouped[b.decision].push(b)
-          }
-        })
-
-        setBookings(grouped)
-      }
-    }
-
-    fetchBookings()
-
-    const channel = supabase
-      .channel('bookings-status')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bookings',
-        },
-        () => {
-          fetchBookings()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      channel.unsubscribe()
-    }
-  }, [])
-
-  const columns = [
-    { key: 'pending', label: '대기', color: 'bg-gray-100', borderColor: 'border-gray-300' },
-    { key: 'confirmed_auto', label: '확정-자동', color: 'bg-[#d7ffb8]', borderColor: 'border-[#58cc02]' },
-    { key: 'confirmed_human', label: '확정-수동', color: 'bg-[#d7ffb8]', borderColor: 'border-[#58cc02]' },
-    { key: 'review', label: '검토', color: 'bg-[#fff8e6]', borderColor: 'border-[#ffc800]' },
-    { key: 'rejected', label: '기각', color: 'bg-[#ffebeb]', borderColor: 'border-[#ff4b4b]' },
-    { key: 'asking', label: '질문', color: 'bg-[#e6f4ff]', borderColor: 'border-[#1cb0f6]' },
-  ]
+  }
+  for (const b of bookings) {
+    const d = (b.decision ?? 'pending') as Decision
+    if (grouped[d]) grouped[d].push(b)
+  }
+  for (const list of Object.values(grouped)) {
+    list.sort((a, b) => a.date.localeCompare(b.date) || a.created_at.localeCompare(b.created_at))
+  }
 
   return (
-    <div className="font-['Pretendard',sans-serif]">
-      <div className="mb-4">
+    <div>
+      <div className="mb-3">
         <h3 className="text-lg font-black text-[#042c60]">상태 보드</h3>
-        <p className="text-xs text-[#777777] font-bold mt-1">예약 상태별 현황</p>
+        <p className="text-xs text-[#777777] font-bold mt-1">예약이 지금 어느 칸에 있는지</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
-        {columns.map((col) => {
-          const items = bookings[col.key as keyof typeof bookings] || []
-
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {COLUMNS.map((col) => {
+          const items = grouped[col.key]
           return (
-            <div
-              key={col.key}
-              className={`${col.color} border-2 ${col.borderColor} rounded-2xl p-4 min-h-[400px] flex flex-col`}
-            >
-              <div className="mb-4 pb-4 border-b-2 border-current/10">
-                <h4 className="font-black text-sm text-[#042c60]">{col.label}</h4>
-                <p className="text-xs font-bold text-[#777777] mt-1">{items.length}건</p>
+            <div key={col.key} className={`${col.bg} border-2 ${col.border} rounded-2xl p-3 min-h-[280px] flex flex-col`}>
+              <div className="mb-3 pb-2 border-b-2 border-black/5 flex items-baseline justify-between">
+                <h4 className="font-black text-sm text-[#042c60]">{DECISION_LABELS[col.key]}</h4>
+                <span className="text-xs font-black text-[#777777]">{items.length}</span>
               </div>
 
-              <div className="flex-1 space-y-3 overflow-y-auto">
+              <div className="flex-1 space-y-2">
                 {items.length === 0 ? (
-                  <p className="text-xs text-[#999999] font-bold text-center py-8">예약이 없습니다</p>
+                  <p className="text-[11px] text-[#afafaf] font-bold text-center py-6">없음</p>
                 ) : (
-                  items.map((booking) => (
-                    <div
-                      key={booking.id}
-                      className="bg-white rounded-xl p-3 border-2 border-current/20 hover:border-current/40 transition-all"
-                    >
-                      <div className="mb-2">
-                        <p className="font-black text-sm text-[#042c60]">{booking.customer}</p>
-                        <p className="text-xs text-[#777777] font-bold mt-0.5">
-                          {booking.date} · {booking.kind}
+                  items.map((b) => {
+                    const assigned = parseSlots(b.slot_assigned)
+                    return (
+                      <div key={b.id} className="bg-white rounded-xl p-2.5 border-2 border-black/5">
+                        <p className="font-black text-sm text-[#042c60] leading-tight">{b.customer}</p>
+                        <p className="text-[11px] text-[#777777] font-bold mt-0.5">
+                          {b.date} · {b.kind ?? '-'}·{b.form ?? '-'}
                         </p>
+                        {b.memo && <p className="text-[11px] text-[#555555] font-bold truncate">{b.memo}</p>}
+                        {assigned.length > 0 ? (
+                          <p className="text-[11px] font-black text-[#58a700] mt-1">✓ {joinSlotsForDisplay(assigned)}</p>
+                        ) : (
+                          b.reason && (
+                            <p className="text-[11px] text-[#777777] font-bold mt-1 line-clamp-2">{b.reason}</p>
+                          )
+                        )}
+                        {col.key === 'review' && b.options && (
+                          <p className="text-[10px] text-[#8a6d00] font-bold mt-1">
+                            {b.options.split(',').join(' vs ')}
+                          </p>
+                        )}
                       </div>
-
-                      <p className="text-xs font-bold text-[#555555] mb-2">
-                        {booking.form} · {booking.memo}
-                      </p>
-
-                      {booking.slot_assigned && (
-                        <p className="text-xs font-black text-[#58cc02] bg-[#d7ffb8]/30 px-2 py-1 rounded-lg">
-                          ✓ {booking.slot_assigned}
-                        </p>
-                      )}
-
-                      {booking.reason && !booking.slot_assigned && (
-                        <p className="text-xs text-[#777777] font-bold line-clamp-2">
-                          {booking.reason}
-                        </p>
-                      )}
-
-                      {booking.options && col.key === 'review' && (
-                        <p className="text-xs text-[#666666] font-bold mt-1">
-                          옵션: {booking.options.split(',').join(' vs ')}
-                        </p>
-                      )}
-                    </div>
-                  ))
+                    )
+                  })
                 )}
               </div>
             </div>

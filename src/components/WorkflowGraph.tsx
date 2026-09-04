@@ -1,259 +1,206 @@
-import { useEffect, useState } from 'react'
-import { supabase } from '../supabaseClient'
+import { DECISION_LABELS, DECISION_NODE } from '../lib/decisionMeta'
+import type { Decision } from '../lib/types'
+
+export type GraphNode = 'intake' | 'judge' | Decision
 
 interface WorkflowGraphProps {
-  refreshKey?: number
+  counts: Record<GraphNode, number>
+  /** 굵게 그릴 화살표 id 들 ("from>to"). 다음 판정까지 유지된다. */
+  activeEdges: string[]
+  /** 값이 바뀌면 굵어지는 애니메이션이 처음부터 다시 돈다 */
+  pulseKey: number
 }
 
-interface NodeCounts {
-  접수: number
-  pending: number
-  판정: number
-  confirmed_auto: number
-  confirmed_human: number
-  review: number
-  rejected: number
-  asking: number
+const R = 28
+const W = 760
+const H = 420
+
+/** 노드 위치. 왼쪽 세 개는 한 줄, 결과 다섯 개는 오른쪽 세로 한 줄. */
+const POS: Record<GraphNode, { x: number; y: number }> = {
+  intake: { x: 70, y: 200 },
+  pending: { x: 220, y: 200 },
+  judge: { x: 370, y: 200 },
+  confirmed_auto: { x: 560, y: 40 },
+  confirmed_human: { x: 560, y: 120 },
+  review: { x: 560, y: 200 },
+  rejected: { x: 560, y: 280 },
+  asking: { x: 560, y: 360 },
 }
 
-interface LastPath {
-  from: string
-  to: string
-  expireAt: number
+const LABEL: Record<GraphNode, string> = {
+  intake: '접수',
+  judge: '판정',
+  ...DECISION_LABELS,
 }
 
-const DECISION_ORDER = ['접수', 'pending', '판정', 'confirmed_auto', 'confirmed_human', 'review', 'rejected', 'asking']
-
-const NODE_LABELS: Record<string, string> = {
-  접수: '접수',
-  pending: '대기',
-  판정: '판정',
-  confirmed_auto: '확정-자동',
-  confirmed_human: '확정-수동',
-  review: '검토',
-  rejected: '기각',
-  asking: '질문',
+const STYLE: Record<GraphNode, { fill: string; stroke: string; text: string }> = {
+  intake: { fill: '#3c3c3c', stroke: '#3c3c3c', text: '#ffffff' },
+  judge: { fill: '#ffffff', stroke: '#000000', text: '#000000' },
+  ...DECISION_NODE,
 }
 
-const NODE_COLORS: Record<string, string> = {
-  접수: '#3c3c3c',
-  pending: '#999999',
-  판정: '#ffffff',
-  confirmed_auto: '#58cc02',
-  confirmed_human: '#ffffff',
-  review: '#ffc800',
-  rejected: '#ff4b4b',
-  asking: '#1cb0f6',
+interface Edge {
+  id: string
+  d: string
+  /** 되돌아가는 화살표는 점선 */
+  dashed?: boolean
+  /** 화살표 옆 작은 설명 */
+  note?: { x: number; y: number; text: string }
 }
 
-const NODE_TEXT: Record<string, string> = {
-  접수: '#ffffff',
-  pending: '#ffffff',
-  판정: '#000000',
-  confirmed_auto: '#ffffff',
-  confirmed_human: '#000000',
-  review: '#042c60',
-  rejected: '#ffffff',
-  asking: '#ffffff',
+/** 두 원 사이의 직선. 원 테두리에서 시작해 원 테두리에서 끝나야 화살촉이 보인다. */
+function straight(from: GraphNode, to: GraphNode): string {
+  const a = POS[from]
+  const b = POS[to]
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const len = Math.hypot(dx, dy)
+  const ux = dx / len
+  const uy = dy / len
+  return `M ${a.x + ux * R} ${a.y + uy * R} L ${b.x - ux * R} ${b.y - uy * R}`
 }
 
-const NODE_BORDER: Record<string, string> = {
-  접수: '#3c3c3c',
-  pending: '#777777',
-  판정: '#000000',
-  confirmed_auto: '#46a302',
-  confirmed_human: '#58cc02',
-  review: '#b39300',
-  rejected: '#c63030',
-  asking: '#0a88cc',
-}
+const EDGES: Edge[] = [
+  { id: 'intake>pending', d: straight('intake', 'pending') },
+  { id: 'pending>judge', d: straight('pending', 'judge') },
+  { id: 'judge>confirmed_auto', d: straight('judge', 'confirmed_auto') },
+  { id: 'judge>confirmed_human', d: straight('judge', 'confirmed_human') },
+  { id: 'judge>review', d: straight('judge', 'review') },
+  { id: 'judge>rejected', d: straight('judge', 'rejected') },
+  { id: 'judge>asking', d: straight('judge', 'asking') },
+  // 자동 off 면 판정이 후보만 잡고 대기로 돌려보낸다. 아래로 살짝 돌아가는 곡선.
+  {
+    id: 'judge>pending',
+    d: `M ${POS.judge.x - 14} ${POS.judge.y + R - 4} Q 295 275 ${POS.pending.x + 14} ${POS.pending.y + R - 4}`,
+    dashed: true,
+    note: { x: 295, y: 262, text: '자동 off: 후보만' },
+  },
+  // 검토 -> 확정-수동 (사람이 고름). 오른쪽으로 돌아 올라간다.
+  {
+    id: 'review>confirmed_human',
+    d: `M ${POS.review.x + R} ${POS.review.y} Q 640 160 ${POS.confirmed_human.x + R} ${POS.confirmed_human.y}`,
+    note: { x: 648, y: 164, text: '사람이 고름' },
+  },
+  // 질문 -> 대기 (답이 오면). 아래로 크게 돌아간다.
+  {
+    id: 'asking>pending',
+    d: `M ${POS.asking.x - 20} ${POS.asking.y + 20} Q 330 420 ${POS.pending.x} ${POS.pending.y + R}`,
+    dashed: true,
+    note: { x: 380, y: 372, text: '답이 오면' },
+  },
+  // 확정-수동 -> 대기 (사람이 되돌림). 위로 크게 돌아간다.
+  {
+    id: 'confirmed_human>pending',
+    d: `M ${POS.confirmed_human.x - 20} ${POS.confirmed_human.y - 20} Q 330 10 ${POS.pending.x} ${POS.pending.y - R}`,
+    dashed: true,
+    note: { x: 330, y: 36, text: '사람이 되돌림' },
+  },
+]
 
-export default function WorkflowGraph({ refreshKey = 0 }: WorkflowGraphProps) {
-  const [counts, setCounts] = useState<NodeCounts>({
-    접수: 0,
-    pending: 0,
-    판정: 0,
-    confirmed_auto: 0,
-    confirmed_human: 0,
-    review: 0,
-    rejected: 0,
-    asking: 0,
-  })
-  const [lastPath, setLastPath] = useState<LastPath | null>(null)
+const ORDER: GraphNode[] = [
+  'intake',
+  'pending',
+  'judge',
+  'confirmed_auto',
+  'confirmed_human',
+  'review',
+  'rejected',
+  'asking',
+]
 
-  useEffect(() => {
-    const fetchCounts = async () => {
-      const { data } = await supabase.from('bookings').select('decision')
-
-      const bookings = (data as { decision: string }[] | null) ?? []
-      const newCounts: NodeCounts = {
-        접수: bookings.length,
-        pending: bookings.filter(b => b.decision === 'pending').length,
-        판정: 0,
-        confirmed_auto: bookings.filter(b => b.decision === 'confirmed_auto').length,
-        confirmed_human: bookings.filter(b => b.decision === 'confirmed_human').length,
-        review: bookings.filter(b => b.decision === 'review').length,
-        rejected: bookings.filter(b => b.decision === 'rejected').length,
-        asking: bookings.filter(b => b.decision === 'asking').length,
-      }
-
-      setCounts(newCounts)
-    }
-
-    fetchCounts()
-
-    const channel = supabase
-      .channel('bookings-workflow')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'bookings',
-        },
-        (payload) => {
-          const oldDecision = (payload.old as { decision?: string } | null)?.decision
-          const newDecision = (payload.new as { decision?: string } | null)?.decision
-
-          if (oldDecision !== newDecision) {
-            setLastPath({
-              from: oldDecision || '접수',
-              to: newDecision || 'pending',
-              expireAt: Date.now() + 2000,
-            })
-          }
-
-          fetchCounts()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      channel.unsubscribe()
-    }
-  }, [refreshKey])
-
-  // 마지막 경로가 2초 후 사라지도록
-  useEffect(() => {
-    if (!lastPath) return
-    const timer = setTimeout(() => setLastPath(null), 2000)
-    return () => clearTimeout(timer)
-  }, [lastPath])
-
-  const SVG_W = 1200
-  const SVG_H = 300
-
-  // 노드 위치 - 4열 2행
-  const positions: Record<string, [number, number]> = {
-    접수: [60, 150],
-    pending: [180, 150],
-    판정: [300, 150],
-    confirmed_auto: [420, 80],
-    confirmed_human: [420, 220],
-    review: [540, 150],
-    rejected: [660, 80],
-    asking: [660, 220],
-  }
-
-  const nodeRadius = 30
-
-  const shouldHighlightArrow = (from: string, to: string): boolean => {
-    if (!lastPath) return false
-    return lastPath.from === from && lastPath.to === to
-  }
+/**
+ * 상태를 노드로, 전이를 화살표로 그린 LangGraph 식 흐름도. 라이브러리 없이 SVG 다.
+ * 원 안의 숫자는 지금 그 상태인 예약 수. 마지막 판정이 지나간 화살표는 굵게 남는다.
+ */
+export default function WorkflowGraph({ counts, activeEdges, pulseKey }: WorkflowGraphProps) {
+  const active = new Set(activeEdges)
 
   return (
-    <div className="bg-white p-6 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_4px_0_#e5e5e5] font-['Pretendard',sans-serif]">
-      <div className="mb-4">
+    <div className="bg-white p-6 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_4px_0_#e5e5e5]">
+      <div className="mb-3">
         <h3 className="text-lg font-black text-[#042c60]">판정 흐름도</h3>
-        <p className="text-xs text-[#777777] font-bold mt-1">예약의 상태 전이 과정</p>
+        <p className="text-xs text-[#777777] font-bold mt-1">
+          원 안은 지금 그 상태인 예약 수 · 굵은 화살표는 마지막 판정이 지나간 길
+        </p>
       </div>
 
-      <svg
-        width="100%"
-        height="300"
-        viewBox={`0 0 ${SVG_W} ${SVG_H}`}
-        className="border-2 border-[#e5e5e5] rounded-xl bg-[#f7f7f7]"
-      >
-        {/* 화살표 정의 */}
+      <style>{`
+        @keyframes wf-pulse {
+          0%   { stroke-width: 7; }
+          70%  { stroke-width: 7; }
+          100% { stroke-width: 3.5; }
+        }
+        .wf-active { animation: wf-pulse 2s ease-out forwards; }
+      `}</style>
+
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="판정 흐름도">
         <defs>
-          <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-            <polygon points="0 0, 10 3, 0 6" fill="#999999" />
+          <marker id="wf-arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L8,4 L0,8 z" fill="#afafaf" />
           </marker>
-          <marker id="arrowhead-bold" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
-            <polygon points="0 0, 10 3, 0 6" fill="#ff4b4b" />
+          <marker id="wf-arrow-active" markerWidth="10" markerHeight="10" refX="10" refY="5" orient="auto" markerUnits="userSpaceOnUse">
+            <path d="M0,0 L10,5 L0,10 z" fill="#042c60" />
           </marker>
         </defs>
 
-        {/* 화살표들 */}
-        {[
-          ['접수', 'pending'],
-          ['pending', '판정'],
-          ['판정', 'confirmed_auto'],
-          ['판정', 'confirmed_human'],
-          ['판정', 'review'],
-          ['판정', 'rejected'],
-          ['판정', 'asking'],
-          ['review', 'confirmed_human'],
-          ['asking', 'pending'],
-          ['confirmed_human', 'pending'],
-        ].map(([from, to]) => {
-          const [x1, y1] = positions[from]
-          const [x2, y2] = positions[to]
-          const isBold = shouldHighlightArrow(from, to)
-
+        {EDGES.map((e) => {
+          const on = active.has(e.id)
           return (
-            <line
-              key={`${from}-${to}`}
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              stroke={isBold ? '#ff4b4b' : '#cccccc'}
-              strokeWidth={isBold ? 3 : 2}
-              markerEnd={isBold ? 'url(#arrowhead-bold)' : 'url(#arrowhead)'}
-            />
+            <g key={e.id}>
+              <path
+                key={on ? `${e.id}-${pulseKey}` : e.id}
+                d={e.d}
+                fill="none"
+                stroke={on ? '#042c60' : '#c8c8c8'}
+                strokeWidth={on ? 3.5 : 2}
+                strokeDasharray={e.dashed && !on ? '6 5' : undefined}
+                strokeLinecap="round"
+                markerEnd={on ? 'url(#wf-arrow-active)' : 'url(#wf-arrow)'}
+                className={on ? 'wf-active' : undefined}
+              />
+              {e.note && (
+                <text
+                  x={e.note.x}
+                  y={e.note.y}
+                  textAnchor="middle"
+                  fontSize="10"
+                  fontWeight="700"
+                  fill={on ? '#042c60' : '#9a9a9a'}
+                >
+                  {e.note.text}
+                </text>
+              )}
+            </g>
           )
         })}
 
-        {/* 노드들 */}
-        {DECISION_ORDER.map((nodeId) => {
-          const [x, y] = positions[nodeId]
-          const count = counts[nodeId as keyof NodeCounts]
-          const bgColor = NODE_COLORS[nodeId]
-          const textColor = NODE_TEXT[nodeId]
-          const borderColor = NODE_BORDER[nodeId]
-
+        {ORDER.map((id) => {
+          const { x, y } = POS[id]
+          const s = STYLE[id]
+          const n = id === 'judge' ? null : counts[id]
           return (
-            <g key={nodeId}>
-              <circle
-                cx={x}
-                cy={y}
-                r={nodeRadius}
-                fill={bgColor}
-                stroke={borderColor}
-                strokeWidth={2}
-              />
+            <g key={id}>
+              <circle cx={x} cy={y} r={R} fill={s.fill} stroke={s.stroke} strokeWidth={3} />
               <text
                 x={x}
-                y={y}
+                y={y + 1}
                 textAnchor="middle"
                 dominantBaseline="middle"
-                fontSize="20"
+                fontSize={n === null ? 14 : 18}
                 fontWeight="900"
-                fill={textColor}
+                fill={s.text}
               >
-                {count}
+                {n === null ? '?' : n}
               </text>
               <text
                 x={x}
-                y={y + nodeRadius + 20}
+                y={y + R + 15}
                 textAnchor="middle"
-                fontSize="12"
-                fontWeight="bold"
-                fill="#555555"
+                fontSize="11"
+                fontWeight="800"
+                fill="#3c3c3c"
               >
-                {NODE_LABELS[nodeId]}
+                {LABEL[id]}
               </text>
             </g>
           )
