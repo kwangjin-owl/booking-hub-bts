@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { describe, fetchCurrent, inForecastRange, type CurrentWeather } from '../lib/weather'
-import { readBase, type BaseLocation } from '../lib/baseLocation'
+import { readBase, writeBase, type BaseLocation } from '../lib/baseLocation'
+import { useTravel } from '../lib/useTravel'
+import { departureTime } from '../lib/travel'
+import { slotSpan } from '../lib/slots'
+import TravelBadge from './TravelBadge'
+import AddressSearch from './AddressSearch'
 import { useWeather } from '../lib/useWeather'
 import { joinSlotsForDisplay, parseSlots } from '../lib/slots'
 import type { BookingRow } from '../lib/types'
@@ -32,6 +37,9 @@ export default function WeatherStrip({ bookings }: WeatherStripProps) {
   const [current, setCurrent] = useState<CurrentWeather | string | 'loading'>('loading')
   // 브라우저 위치를 쓰고 있는지. 거절하면 기준 위치로 돌아간다.
   const [usingDevice, setUsingDevice] = useState(false)
+  // 출발지 바꾸기 패널
+  const [editingBase, setEditingBase] = useState(false)
+  const [baseQuery, setBaseQuery] = useState('')
 
   // 브라우저가 위치를 주면 그걸 쓰고, 막히거나 느리면 기준 위치로 간다.
   useEffect(() => {
@@ -86,6 +94,7 @@ export default function WeatherStrip({ bookings }: WeatherStripProps) {
   const weather = useWeather(
     upcoming.map((b) => ({ id: b.id, date: b.date, address: b.address })),
   )
+  const travel = useTravel(upcoming.map((b) => ({ id: b.id, address: b.address })))
 
   const info = typeof current === 'object' ? describe(current.code) : null
 
@@ -116,9 +125,37 @@ export default function WeatherStrip({ bookings }: WeatherStripProps) {
 
       {/* 다가오는 확정 외근 */}
       <div className="flex-1 min-w-[280px] px-4 py-3 bg-white border-2 border-[#e5e5e5] rounded-2xl shadow-[0_4px_0_#e5e5e5]">
-        <p className="text-[11px] font-black text-[#afafaf] uppercase tracking-wider mb-2">
-          다가오는 외근 날씨
-        </p>
+        <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
+          <p className="text-[11px] font-black text-[#afafaf] uppercase tracking-wider">
+            다가오는 외근 · 날씨와 이동 시간
+          </p>
+          <button
+            onClick={() => setEditingBase((v) => !v)}
+            className="text-[11px] font-bold text-[#1cb0f6] hover:underline cursor-pointer"
+          >
+            {editingBase ? '닫기' : `출발지: ${base.label} 바꾸기`}
+          </button>
+        </div>
+
+        {/* 이동 시간의 출발지. 여기서 바꾸면 브라우저에 저장된다. */}
+        {editingBase && (
+          <div className="mb-3 p-3 bg-[#f7f7f7] border-2 border-[#e5e5e5] rounded-xl">
+            <AddressSearch
+              value={baseQuery}
+              onChange={setBaseQuery}
+              onSelect={(r) => {
+                const label = r.korean || r.display_name
+                writeBase({ lat: r.lat, lon: r.lon, label })
+                setBase({ lat: r.lat, lon: r.lon, label })
+                setBaseQuery('')
+                setEditingBase(false)
+              }}
+            />
+            <p className="text-[11px] font-bold text-[#777777] mt-2">
+              여기서 예약 장소까지의 차량 이동 시간을 계산합니다. 실시간 교통은 반영되지 않습니다.
+            </p>
+          </div>
+        )}
 
         {upcoming.length === 0 ? (
           <p className="text-sm font-bold text-[#afafaf]">확정된 외근 예약이 없습니다</p>
@@ -137,7 +174,18 @@ export default function WeatherStrip({ bookings }: WeatherStripProps) {
                       {slots.length > 0 && ` · ${joinSlotsForDisplay(slots)}`}
                     </p>
                   </div>
-                  <WeatherBadge state={weather[b.id]} />
+                  <div className="flex flex-col items-start gap-1">
+                    <WeatherBadge state={weather[b.id]} />
+                    <TravelBadge
+                      state={travel[b.id]}
+                      departAt={(() => {
+                        const t = travel[b.id]
+                        if (!t || typeof t === 'string') return null
+                        const span = slotSpan(b.slot_assigned)
+                        return span ? departureTime(span.start, t.minutes) : null
+                      })()}
+                    />
+                  </div>
                 </div>
               )
             })}

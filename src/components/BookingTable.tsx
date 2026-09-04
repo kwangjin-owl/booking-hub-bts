@@ -9,6 +9,10 @@ import { useWeather } from '../lib/useWeather'
 import { syncCalendar } from '../lib/calendarSync'
 import type { BookingRow } from '../lib/types'
 import WeatherBadge from './WeatherBadge'
+import { useTravel } from '../lib/useTravel'
+import { departureTime } from '../lib/travel'
+import TravelBadge from './TravelBadge'
+import { slotSpan } from '../lib/slots'
 
 interface Booking {
   id: number
@@ -144,6 +148,13 @@ export default function BookingTable({
     [bookings],
   )
   const weather = useWeather(weatherTargets)
+  // 이동 시간도 같은 대상(확정된 외근)이다. 목적지 좌표는 날씨와 캐시를 공유한다.
+  const travel = useTravel(
+    useMemo(
+      () => weatherTargets.map((t) => ({ id: t.id, address: t.address })),
+      [weatherTargets],
+    ),
+  )
 
   /** 검색어와 상태 필터를 함께 적용한다. */
   const visible = useMemo(() => {
@@ -651,20 +662,37 @@ export default function BookingTable({
                       </td>
                       <td className="px-4 py-4 font-medium">
                         {booking.address ? (
-                          <button
-                            onClick={() => handleShowMap(booking)}
-                            title={booking.address}
-                            className="text-left cursor-pointer group"
-                          >
-                            <span className="text-[#1cb0f6] font-bold underline group-hover:text-[#0d99dc] leading-snug">
-                              {booking.address}
-                            </span>
-                            {booking.detail_address && (
-                              <span className="block text-[11px] text-[#777777] font-bold mt-0.5">
-                                {booking.detail_address}
+                          <>
+                            <button
+                              onClick={() => handleShowMap(booking)}
+                              title={booking.address}
+                              className="text-left cursor-pointer group"
+                            >
+                              <span className="text-[#1cb0f6] font-bold underline group-hover:text-[#0d99dc] leading-snug">
+                                {booking.address}
+                              </span>
+                              {booking.detail_address && (
+                                <span className="block text-[11px] text-[#777777] font-bold mt-0.5">
+                                  {booking.detail_address}
+                                </span>
+                              )}
+                            </button>
+
+                            {/* 확정된 외근이면 기준 위치에서 얼마나 걸리는지 */}
+                            {travel[booking.id] !== undefined && (
+                              <span className="block mt-1.5">
+                                <TravelBadge
+                                  state={travel[booking.id]}
+                                  departAt={(() => {
+                                    const t = travel[booking.id]
+                                    if (!t || typeof t === 'string') return null
+                                    const span = slotSpan(booking.slot_assigned)
+                                    return span ? departureTime(span.start, t.minutes) : null
+                                  })()}
+                                />
                               </span>
                             )}
-                          </button>
+                          </>
                         ) : (
                           <span className="text-[#afafaf]">-</span>
                         )}
