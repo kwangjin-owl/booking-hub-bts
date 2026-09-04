@@ -8,9 +8,10 @@ import BookingForm from './components/BookingForm'
 import StatCards, { type StatTarget } from './components/StatCards'
 import WeatherCard from './components/WeatherCard'
 import CalendarView from './components/CalendarView'
+import PendingReview from './components/PendingReview'
 import LoginPage from './components/LoginPage'
 
-type TabType = '대시보드' | '예약' | '예약 추가'
+type TabType = '대시보드' | '예약' | '예약 추가' | '미확정 관리'
 type ListViewType = '목록' | '캘린더'
 
 /** 구글에서 돌아온 뒤 주소창에 남는 ?code=... / #access_token=... 을 지운다. */
@@ -142,6 +143,7 @@ export default function App() {
     { id: '대시보드', label: '대시보드' },
     { id: '예약', label: isAdmin ? '예약 관리' : '내 예약' },
     { id: '예약 추가', label: '예약 추가' },
+    ...(isAdmin ? ([{ id: '미확정 관리' as const, label: '미확정 관리' }] as const) : []),
   ]
 
   const listViews: { id: ListViewType; label: string }[] = [
@@ -286,6 +288,16 @@ export default function App() {
               description="필수 정보를 입력하여 새로운 예약을 간편하게 추가하세요."
             />
             <BookingForm onSuccess={handleFormSuccess} />
+          </div>
+        )}
+
+        {activeTab === '미확정 관리' && (
+          <div className="space-y-6">
+            <PageHeader
+              title="미확정 관리"
+              description="대기 중인 예약을 검토하고 슬롯을 배정하세요."
+            />
+            <PendingReview refreshKey={refreshKey} />
           </div>
         )}
       </div>
