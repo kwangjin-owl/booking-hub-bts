@@ -573,7 +573,7 @@ export default function BookingTable({
                               판정: {booking.decision}
                             </div>
                           )}
-                          {booking.decision && ['confirmed_auto', 'confirmed_human'].includes(booking.decision) && isAdmin && (
+                          {booking.decision && ['confirmed_auto', 'confirmed_human', 'rejected', 'asking'].includes(booking.decision) && isAdmin && (
                             <button
                               onClick={() => handleDecisionRevert(booking)}
                               disabled={isBusy}

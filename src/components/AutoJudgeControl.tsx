@@ -23,9 +23,11 @@ export default function AutoJudgeControl() {
         return
       }
 
-      const pending = allBookings.filter((b) => b.decision === 'pending')
+      const toJudge = allBookings.filter((b) =>
+        ['pending', 'rejected', 'asking'].includes(b.decision)
+      )
 
-      for (const booking of pending) {
+      for (const booking of toJudge) {
         const decideBooking: DecideBooking = {
           id: booking.id,
           kind: booking.kind,
