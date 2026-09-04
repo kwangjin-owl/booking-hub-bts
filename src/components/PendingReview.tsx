@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import { decide, type Booking as DecideBooking } from '../lib/decide'
 
 interface Booking {
   id: number
@@ -24,6 +25,8 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [expandedTrace, setExpandedTrace] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editDraft, setEditDraft] = useState({ kind: '', date: '', slots_wanted: '' })
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -80,6 +83,68 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
     }
   }
 
+  const handleRevert = async (booking: Booking) => {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ decision: 'pending' })
+      .eq('id', booking.id)
+
+    if (error) {
+      console.error('되돌리기 실패:', error)
+      return
+    }
+
+    setBookings(bookings.filter((b) => b.id !== booking.id))
+  }
+
+  const handleEditStart = (booking: Booking) => {
+    setEditingId(booking.id)
+    setEditDraft({
+      kind: booking.kind,
+      date: booking.date,
+      slots_wanted: booking.slots_wanted,
+    })
+  }
+
+  const handleEditSave = async (booking: Booking) => {
+    const { data: allBookings } = await supabase.from('bookings').select('*')
+    if (!allBookings) return
+
+    const updated = { ...booking, ...editDraft }
+    const decideBooking: DecideBooking = {
+      id: updated.id,
+      kind: updated.kind,
+      date: updated.date,
+      slots_wanted: updated.slots_wanted,
+      customer: updated.customer,
+    }
+
+    const autoOn = localStorage.getItem('auto-judge') !== 'false'
+    const result = decide(decideBooking, allBookings, autoOn)
+
+    const { error } = await supabase
+      .from('bookings')
+      .update({
+        kind: editDraft.kind,
+        date: editDraft.date,
+        slots_wanted: editDraft.slots_wanted,
+        decision: result.decision,
+        slot_assigned: result.slotAssigned || null,
+        reason: result.reason,
+        options: result.options ? result.options.join(',') : null,
+        trace: result.trace.join('\n'),
+      })
+      .eq('id', booking.id)
+
+    if (error) {
+      console.error('수정 실패:', error)
+      return
+    }
+
+    setEditingId(null)
+    setBookings(bookings.filter((b) => b.id !== booking.id))
+  }
+
 
   const getBadgeColor = (decision: string) => {
     switch (decision) {
@@ -125,9 +190,24 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
     )
   }
 
+  const slotMap: Record<string, string> = {
+    morning: '오전',
+    afternoon1: '오후-1',
+    afternoon2: '오후-2',
+  }
+
+  const formatSlots = (slots: string) => {
+    return slots
+      .split(',')
+      .map((s) => slotMap[s.trim()] || s.trim())
+      .join(', ')
+  }
+
   return (
     <div className="space-y-4 font-['Pretendard',sans-serif]">
-      {bookings.map((booking) => (
+      {bookings.map((booking) => {
+        const isEditing = editingId === booking.id
+        return (
         <div key={booking.id} className="bg-white p-4 rounded-2xl border-2 border-[#e5e5e5] shadow-[0_4px_0_#e5e5e5]">
           <div className="flex items-start justify-between gap-4 mb-3">
             <div className="flex-1">
@@ -140,9 +220,47 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
               <p className="text-sm font-bold text-[#3c3c3c] mb-1">
                 {booking.date} · {booking.kind} · {booking.form}
               </p>
-              <p className="text-sm font-bold text-[#777777]">{booking.reason}</p>
-              {booking.slot_assigned && (
-                <p className="text-sm font-black text-[#58cc02]">✓ 확정 칸: {booking.slot_assigned}</p>
+              {isEditing ? (
+                <div className="space-y-2 mt-2">
+                  <input
+                    type="date"
+                    value={editDraft.date}
+                    onChange={(e) => setEditDraft({ ...editDraft, date: e.target.value })}
+                    className="w-full px-2 py-1 text-sm border-2 border-[#1cb0f6] rounded-lg"
+                  />
+                  <div>
+                    <label className="text-xs font-bold text-[#777777]">희망 슬롯</label>
+                    <div className="space-y-1">
+                      {Object.entries(slotMap).map(([id, label]) => (
+                        <label key={id} className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={editDraft.slots_wanted.includes(id)}
+                            onChange={(e) => {
+                              const slots = editDraft.slots_wanted.split(',').filter(Boolean)
+                              if (e.target.checked) {
+                                setEditDraft({ ...editDraft, slots_wanted: [...slots, id].join(',') })
+                              } else {
+                                setEditDraft({ ...editDraft, slots_wanted: slots.filter((s) => s !== id).join(',') })
+                              }
+                            }}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-sm font-bold text-[#777777]">{booking.reason}</p>
+                  <p className="text-sm font-bold text-[#555555] mt-1">
+                    희망: {formatSlots(booking.slots_wanted)}
+                  </p>
+                  {booking.slot_assigned && (
+                    <p className="text-sm font-black text-[#58cc02]">✓ 확정 칸: {formatSlots(booking.slot_assigned)}</p>
+                  )}
+                </>
               )}
             </div>
 
@@ -152,7 +270,7 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
                   onClick={() => handleConfirm(booking)}
                   className="bg-[#58cc02] hover:bg-[#46a302] text-white font-black px-4 py-2 rounded-xl text-xs transition-all shadow-[0_2px_0_#46a302] active:translate-y-[2px] active:shadow-none cursor-pointer"
                 >
-                  확정
+                  ✓ 확정
                 </button>
               )}
 
@@ -169,10 +287,48 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
                   ))}
                 </div>
               )}
+
+              {booking.decision === 'asking' && (
+                <>
+                  {isEditing ? (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleEditSave(booking)}
+                        className="flex-1 bg-[#58cc02] hover:bg-[#46a302] text-white font-black px-3 py-2 rounded-lg text-xs transition-all cursor-pointer"
+                      >
+                        저장 & 재판정
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="flex-1 bg-white border-2 border-[#e5e5e5] text-[#777777] font-black px-3 py-2 rounded-lg text-xs transition-all cursor-pointer"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleEditStart(booking)}
+                      className="w-full bg-[#1cb0f6] hover:bg-[#0d99dc] text-white font-black px-4 py-2 rounded-xl text-xs transition-all shadow-[0_2px_0_#0d99dc] active:translate-y-[2px] active:shadow-none cursor-pointer"
+                    >
+                      ✏️ 정보 수정 & 재판정
+                    </button>
+                  )}
+                </>
+              )}
+
+              {booking.decision === 'rejected' && (
+                <button
+                  onClick={() => handleRevert(booking)}
+                  className="bg-[#ff4b4b] hover:bg-[#e63030] text-white font-black px-4 py-2 rounded-xl text-xs transition-all shadow-[0_2px_0_#c63030] active:translate-y-[2px] active:shadow-none cursor-pointer"
+                >
+                  재판정
+                </button>
+              )}
             </div>
           </div>
 
           {/* 과정 보기 */}
+
           <div className="border-t-2 border-[#e5e5e5] pt-3 mt-3">
             <button
               onClick={() => setExpandedTrace(expandedTrace === booking.id ? null : booking.id)}
@@ -192,7 +348,8 @@ export default function PendingReview({ refreshKey = 0 }: PendingReviewProps) {
             )}
           </div>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

@@ -47,6 +47,16 @@ function shortDate(iso?: string) {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
+/** 슬롯 ID를 레이블로 변환 */
+function getSlotLabel(time: string): string {
+  const slots: Record<string, string> = {
+    morning: '오전 10-12',
+    afternoon1: '오후-1 13-15',
+    afternoon2: '오후-2 15-17',
+  }
+  return slots[time] || time
+}
+
 export default function BookingTable({
   refreshKey = 0,
   isAdmin = false,
@@ -522,7 +532,7 @@ export default function BookingTable({
                         )}
                       </td>
                       <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
-                        {booking.time}
+                        {getSlotLabel(booking.time)}
                       </td>
                       <td className="px-4 py-4 font-medium">
                         {booking.address ? (
