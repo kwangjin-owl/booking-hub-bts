@@ -3,6 +3,8 @@ import { supabase } from '../supabaseClient'
 import { addBookingToCalendar, removeBookingFromCalendar } from '../lib/calendar'
 import BookingEditModal, { type EditDraft } from './BookingEditModal'
 import MapView from './MapView'
+import { joinSlotsForDisplay, parseSlots, timeFromSlots } from '../lib/slots'
+import { decisionLabel } from '../lib/decisionMeta'
 
 interface Booking {
   id: number
@@ -11,8 +13,9 @@ interface Booking {
   date: string
   time: string
   status: string
-  decision?: string
-  slot_assigned?: string
+  decision?: string | null
+  slot_assigned?: string | null
+  slots_wanted?: string | null
   address?: string | null
   detail_address?: string | null
   calendar_event_id?: string | null
@@ -47,14 +50,16 @@ function shortDate(iso?: string) {
   return `${d.getMonth() + 1}/${d.getDate()}`
 }
 
-/** 슬롯 ID를 레이블로 변환 */
-function getSlotLabel(time: string): string {
-  const slots: Record<string, string> = {
-    morning: '오전 10-12',
-    afternoon1: '오후-1 13-15',
-    afternoon2: '오후-2 15-17',
-  }
-  return slots[time] || time
+/**
+ * 시간 칸 대신 슬롯을 보여준다.
+ * 배정된 칸이 있으면 그것을, 없으면 희망 순서를, 둘 다 없으면(옛 예약) 시간을 그대로.
+ */
+function slotCell(b: Booking): { text: string; muted: boolean } {
+  const assigned = parseSlots(b.slot_assigned)
+  if (assigned.length) return { text: joinSlotsForDisplay(assigned), muted: false }
+  const wanted = parseSlots(b.slots_wanted)
+  if (wanted.length) return { text: `희망 ${wanted.join(' > ')}`, muted: true }
+  return { text: b.time || '-', muted: true }
 }
 
 export default function BookingTable({
@@ -97,7 +102,7 @@ export default function BookingTable({
       const { data, error } = await supabase
         .from('bookings')
         .select(
-          'id, customer, service, date, time, status, decision, slot_assigned, address, detail_address, calendar_event_id, created_at',
+          'id, customer, service, date, time, status, decision, slot_assigned, slots_wanted, address, detail_address, calendar_event_id, created_at',
         )
 
       if (error) {
@@ -184,11 +189,18 @@ export default function BookingTable({
     let eventId: string | null = booking.calendar_event_id ?? null
 
     if (goingToConfirm) {
+      // 시간 칸을 없앴으므로 배정된 슬롯의 시작 시각으로 캘린더 일정을 만든다.
+      const time = timeFromSlots(booking.slot_assigned, booking.time)
+      if (!time) {
+        setMessage({ kind: 'err', text: '배정된 슬롯이 없어 캘린더 시각을 정할 수 없습니다. 먼저 판정하세요.' })
+        setBusyId(null)
+        return
+      }
       const result = await addBookingToCalendar({
         customer: booking.customer,
         service: booking.service,
         date: booking.date,
-        time: booking.time,
+        time,
         address: [booking.address, booking.detail_address].filter(Boolean).join(' '),
       })
 
@@ -289,7 +301,7 @@ export default function BookingTable({
         customer: draft.customer,
         service: draft.service,
         date: draft.date,
-        time: draft.time,
+        time: timeFromSlots(booking.slot_assigned, draft.time),
         address: [draft.address, draft.detailAddress].filter(Boolean).join(' '),
       })
       eventId = result.ok ? (result.eventId ?? null) : null
@@ -489,7 +501,7 @@ export default function BookingTable({
                   <th className="px-4 py-4 text-left">고객사</th>
                   <th className="px-4 py-4 text-left">서비스</th>
                   <th className="px-4 py-4 text-left">날짜</th>
-                  <th className="px-4 py-4 text-left">시간</th>
+                  <th className="px-4 py-4 text-left">슬롯</th>
                   <th className="px-4 py-4 text-left">위치</th>
                   <th className="px-4 py-4 text-center">상태</th>
                   {isAdmin && <th className="px-4 py-4 text-center">관리</th>}
@@ -531,8 +543,11 @@ export default function BookingTable({
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-4 font-bold text-[#777777] whitespace-nowrap">
-                        {getSlotLabel(booking.time)}
+                      <td className="px-4 py-4 font-bold whitespace-nowrap">
+                        {(() => {
+                          const c = slotCell(booking)
+                          return <span className={c.muted ? 'text-[#afafaf]' : 'text-[#58a700]'}>{c.text}</span>
+                        })()}
                       </td>
                       <td className="px-4 py-4 font-medium">
                         {booking.address ? (
@@ -580,7 +595,7 @@ export default function BookingTable({
                           </button>
                           {booking.decision && (
                             <div className="text-xs font-bold text-[#555555]">
-                              판정: {booking.decision}
+                              판정: {decisionLabel(booking.decision)}
                             </div>
                           )}
                           {booking.decision && ['confirmed_auto', 'confirmed_human', 'rejected', 'asking'].includes(booking.decision) && isAdmin && (
