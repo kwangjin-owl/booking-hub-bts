@@ -8,6 +8,7 @@ import AutoJudgeControl from './AutoJudgeControl'
 import WorkflowGraph, { type GraphNode } from './WorkflowGraph'
 import DecisionLog, { type LogEntry } from './DecisionLog'
 import StatusBoard from './StatusBoard'
+import WeatherStrip from './WeatherStrip'
 
 interface DashboardProps {
   refreshKey?: number
@@ -235,6 +236,9 @@ export default function Dashboard({ refreshKey = 0 }: DashboardProps) {
           {needsAttention > 0 ? `사람이 볼 것 ${needsAttention}건` : '사람이 볼 것 없음'}
         </span>
       </div>
+
+      {/* 지금 날씨 + 다가오는 확정 외근의 예보 */}
+      <WeatherStrip bookings={bookings} />
 
       {/* 넓은 화면에서는 흐름도와 로그를 나란히 둔다. 상태 보드가 스크롤 없이 보이게 하려는 것이다. */}
       <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_1fr] gap-5 items-start">

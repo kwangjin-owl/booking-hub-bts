@@ -85,6 +85,40 @@ export async function geocode(address: string): Promise<Coords | null> {
   return found
 }
 
+export interface CurrentWeather {
+  code: number
+  temp: number
+  feels: number
+  /** 지금 내리고 있는 양 (mm) */
+  precip: number
+}
+
+/** 좌표 -> 지금 날씨. 예보와 달리 캐시하지 않는다 (지금 값이어야 의미가 있다). */
+export async function fetchCurrent(c: Coords): Promise<CurrentWeather | string> {
+  try {
+    const url = new URL('https://api.open-meteo.com/v1/forecast')
+    url.searchParams.append('latitude', String(c.lat))
+    url.searchParams.append('longitude', String(c.lon))
+    url.searchParams.append(
+      'current',
+      'temperature_2m,apparent_temperature,weather_code,precipitation',
+    )
+    url.searchParams.append('timezone', 'Asia/Seoul')
+
+    const cur = (await (await fetch(url.toString())).json())?.current
+    if (cur?.weather_code === undefined || cur.weather_code === null) return '지금 날씨를 못 받음'
+
+    return {
+      code: cur.weather_code,
+      temp: Math.round(cur.temperature_2m),
+      feels: Math.round(cur.apparent_temperature),
+      precip: cur.precipitation ?? 0,
+    }
+  } catch {
+    return '지금 날씨를 못 받음'
+  }
+}
+
 /** 좌표 + 날짜 -> 그 날 예보. Open-Meteo 는 키가 필요 없고 제한도 넉넉하다. */
 export async function fetchDaily(c: Coords, date: string): Promise<WeatherResult> {
   const url = new URL('https://api.open-meteo.com/v1/forecast')
