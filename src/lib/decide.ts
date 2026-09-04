@@ -125,14 +125,14 @@ export function decide(
     trace.push(`결과: 기각 - ${reason} (그 날 빈 칸: ${free.length ? free.join(', ') : '없음'})`)
     return { decision: 'rejected', reason, options: free, trace }
   }
-  const first = candidates[0]
   trace.push(
     `4 희망 순서대로 필요한 칸이 전부 O 인 후보: ${candidates.map(joinSlotsForDisplay).join(', ')}`,
   )
 
-  // 5. 같은 날 아직 확정되지 않은 다른 요청과 비교.
-  //    상대의 후보가 하나뿐이고 그 칸이 내 첫 후보와 겹치면 접수 순서로 가져가지 않고 사람에게 넘긴다.
-  //    review 상태인 상대도 아직 자리를 못 받은 것이므로 pending 과 같이 본다.
+  // 5. 같은 날 아직 자리를 못 받은 다른 요청과 비교.
+  //    상대의 후보가 하나뿐이면 그 상대는 물러설 곳이 없다. 그 칸은 건드리지 않는다.
+  //    나는 다른 후보가 있으면 그리로 양보한다 - 양쪽 다 갈 곳이 없을 때만 사람을 부른다.
+  //    (전에는 내 첫 후보만 보고 검토로 넘겨, 비켜 갈 수 있는데도 사람을 부르는 일이 많았다)
   const rivals = allBookings.filter(
     (b) =>
       (b.id == null || b.id !== booking.id) &&
@@ -141,26 +141,54 @@ export function decide(
       !!b.kind &&
       parseSlots(b.slots_wanted).length > 0,
   )
+
+  const locked: { customer: string; slots: Slot[] }[] = []
   for (const r of rivals) {
     const rc = candidatesFor(r, occ)
-    if (rc.length === 1 && overlaps(rc[0], first)) {
-      const me = booking.customer || '이 예약'
-      const you = r.customer || '다른 예약'
-      const reason = `동점 - ${you} 도 같은 칸이 유일 후보`
-      trace.push(
-        `5 같은 날 대기 요청 비교: ${you} 의 유일 후보 ${joinSlotsForDisplay(rc[0])} 이 내 첫 후보 ${joinSlotsForDisplay(first)} 와 겹침`,
-      )
-      trace.push(`결과: 검토 - ${reason}`)
-      return { decision: 'review', reason, options: [me, you], trace }
+    if (rc.length === 1) {
+      locked.push({ customer: r.customer || '다른 예약', slots: rc[0] })
     }
   }
-  trace.push(
-    rivals.length === 0
-      ? '5 같은 날 대기 요청 비교: 대기 요청 없음'
-      : '5 같은 날 대기 요청 비교: 겹치는 유일 후보 없음',
-  )
+
+  if (locked.length === 0) {
+    trace.push(
+      rivals.length === 0
+        ? '5 같은 날 대기 요청 비교: 대기 요청 없음'
+        : '5 같은 날 대기 요청 비교: 물러설 곳 없는 요청 없음',
+    )
+  } else {
+    trace.push(
+      `5 같은 날 대기 요청 비교: 물러설 곳 없는 요청 - ${locked
+        .map((l) => `${l.customer}(${joinSlotsForDisplay(l.slots)})`)
+        .join(', ')}`,
+    )
+  }
+
+  // 상대가 잠근 칸을 피할 수 있는 내 후보
+  const free = candidates.find((c) => !locked.some((l) => overlaps(l.slots, c)))
+
+  if (!free) {
+    // 내 후보 전부가 물러설 곳 없는 상대와 겹친다. 이제야 사람이 고를 일이다.
+    const blockers = [
+      ...new Set(
+        locked
+          .filter((l) => candidates.some((c) => overlaps(l.slots, c)))
+          .map((l) => l.customer),
+      ),
+    ]
+    const me = booking.customer || '이 예약'
+    const reason = `동점 - ${blockers.join(', ')} 도 같은 칸이 유일 후보`
+    trace.push(`5-1 내 후보 ${candidates.map(joinSlotsForDisplay).join(', ')} 이 모두 겹침 - 양보할 곳 없음`)
+    trace.push(`결과: 검토 - ${reason}`)
+    return { decision: 'review', reason, options: [me, ...blockers], trace }
+  }
+
+  if (free !== candidates[0]) {
+    trace.push(`5-1 첫 후보는 겹쳐서 양보 - ${joinSlotsForDisplay(free)} 로 비켜 감`)
+  }
 
   // 결과
+  const first = free
   const shown = joinSlotsForDisplay(first)
   if (autoOn) {
     const reason = `빈 칸 ${shown} 확정`

@@ -44,13 +44,14 @@ export default function StatusBoard({ bookings }: StatusBoardProps) {
         {COLUMNS.map((col) => {
           const items = grouped[col.key]
           return (
-            <div key={col.key} className={`${col.bg} border-2 ${col.border} rounded-2xl p-3 min-h-[170px] flex flex-col`}>
+            <div key={col.key} className={`${col.bg} border-2 ${col.border} rounded-2xl p-3 h-[340px] flex flex-col`}>
               <div className="mb-3 pb-2 border-b-2 border-black/5 flex items-baseline justify-between">
                 <h4 className="font-black text-sm text-[#042c60]">{DECISION_LABELS[col.key]}</h4>
                 <span className="text-xs font-black text-[#777777]">{items.length}</span>
               </div>
 
-              <div className="flex-1 space-y-2">
+              {/* 한 열만 길어져도 나머지 빈 열까지 늘어나지 않게 높이를 묶는다 */}
+              <div className="flex-1 space-y-2 overflow-y-auto pr-1">
                 {items.length === 0 ? (
                   <p className="text-[11px] text-[#afafaf] font-bold text-center py-6">없음</p>
                 ) : (

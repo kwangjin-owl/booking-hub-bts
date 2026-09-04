@@ -1,8 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
-import { supabase } from '../supabaseClient'
 import { isDecision } from '../lib/decisionMeta'
-import { fetchAllBookings, judgeAllPending, readAutoOn, writeAutoOn } from '../lib/judgeRunner'
+import {
+  fetchAllBookings,
+  findSlotOverlaps,
+  judgeAllPending,
+  judgeMany,
+  readAutoOn,
+  writeAutoOn,
+} from '../lib/judgeRunner'
+import { syncCalendar } from '../lib/calendarSync'
+import { supabase } from '../supabaseClient'
 import type { BookingRow, Decision } from '../lib/types'
 import AutoJudgeControl from './AutoJudgeControl'
 import WorkflowGraph, { type GraphNode } from './WorkflowGraph'
@@ -149,18 +157,56 @@ export default function Dashboard({ refreshKey = 0 }: DashboardProps) {
     }
   }, [])
 
+  /**
+   * 같은 칸에 둘 이상 확정된 것을 푼다.
+   * 먼저 접수한 쪽이 자리를 지키고, 나중 것은 대기로 돌려 다시 판정한다.
+   */
+  const handleFixOverlaps = async () => {
+    setJudging(true)
+    setNotice(null)
+    try {
+      const overlaps = findSlotOverlaps(bookings)
+      // 한 예약이 여러 칸에서 겹칠 수 있으므로 id 를 모아 한 번씩만 처리한다
+      const losers = new Map<number, BookingRow>()
+      for (const o of overlaps) {
+        for (const b of o.bookings.slice(1)) losers.set(b.id, b)
+      }
+
+      for (const b of losers.values()) {
+        await supabase
+          .from('bookings')
+          .update({
+            decision: 'pending',
+            slot_assigned: null,
+            candidate: null,
+            reason: '같은 칸에 겹쳐 대기로 되돌림',
+          })
+          .eq('id', b.id)
+        await syncCalendar({ ...b, decision: 'pending', slot_assigned: null })
+      }
+
+      await judgeMany([...losers.keys()], autoOn)
+      setNotice(`겹친 ${losers.size}건을 대기로 되돌리고 다시 판정했습니다.`)
+      await reload()
+    } catch (err) {
+      setNotice(`겹침 정리 실패: ${(err as Error).message}`)
+    } finally {
+      setJudging(false)
+    }
+  }
+
   const handleJudgeAll = async () => {
     setJudging(true)
     setNotice(null)
     try {
       const { judged, calendarErrors } = await judgeAllPending(autoOn)
       if (judged === 0) {
-        setNotice('대기 중인 예약이 없습니다.')
+        setNotice('다시 판정할 예약이 없습니다.')
       } else if (calendarErrors.length > 0) {
         // 판정은 됐는데 캘린더만 실패한 경우. 어느 건이 실패했는지 그대로 보여준다.
         setNotice(`${judged}건 판정 · 캘린더 ${calendarErrors.length}건 실패 — ${calendarErrors[0]}`)
       } else {
-        setNotice(`${judged}건을 판정했습니다. 확정된 건은 구글 캘린더에 올라갔습니다.`)
+        setNotice(`${judged}건을 다시 판정했습니다. 확정된 건은 구글 캘린더에 올라갔습니다.`)
       }
       // realtime 이 꺼져 있어도 화면은 맞아야 한다.
       await reload()
@@ -194,6 +240,8 @@ export default function Dashboard({ refreshKey = 0 }: DashboardProps) {
       b.date >= todayStr &&
       (b.decision === 'review' || b.decision === 'rejected' || b.decision === 'asking'),
   ).length
+
+  const overlaps = findSlotOverlaps(bookings)
 
   const summary: { label: string; n: number; cls: string }[] = [
     { label: '전체', n: bookings.length, cls: 'bg-[#3c3c3c] text-white' },
@@ -243,6 +291,33 @@ export default function Dashboard({ refreshKey = 0 }: DashboardProps) {
           {needsAttention > 0 ? `사람이 볼 것 ${needsAttention}건` : '사람이 볼 것 없음'}
         </span>
       </div>
+
+      {/* 같은 칸에 둘이 들어간 것은 조용히 두면 안 된다. 맨 위에 드러낸다. */}
+      {overlaps.length > 0 && (
+        <div className="p-4 bg-[#ff4b4b]/10 border-2 border-[#ff4b4b] rounded-2xl">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <p className="text-sm font-black text-[#ff4b4b]">
+                ⚠ 같은 칸에 확정이 겹쳤습니다 ({overlaps.length}곳)
+              </p>
+              <ul className="mt-2 space-y-1">
+                {overlaps.map((o) => (
+                  <li key={`${o.date}-${o.slot}`} className="text-xs font-bold text-[#3c3c3c]">
+                    {o.date} · {o.slot} — {o.bookings.map((b) => b.customer).join(', ')}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <button
+              onClick={handleFixOverlaps}
+              disabled={judging}
+              className="px-4 py-2 rounded-xl text-xs font-black bg-[#ff4b4b] text-white shadow-[0_2px_0_#c63030] active:translate-y-[2px] active:shadow-none cursor-pointer disabled:opacity-50 whitespace-nowrap"
+            >
+              먼저 접수한 쪽만 남기고 다시 판정
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 지금 날씨 + 다가오는 확정 외근의 예보 */}
       <WeatherStrip bookings={bookings} />

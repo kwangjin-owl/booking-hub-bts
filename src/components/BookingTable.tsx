@@ -62,6 +62,8 @@ function shortDate(iso?: string) {
  */
 function slotCell(b: Booking): { text: string; muted: boolean } {
   const assigned = parseSlots(b.slot_assigned)
+  // 세 칸을 다 잡으면 '오전+오후-1+오후-2' 라 길다. 뜻은 하루 종일이다.
+  if (assigned.length === 3) return { text: '종일 10-17', muted: false }
   if (assigned.length) return { text: joinSlotsForDisplay(assigned), muted: false }
   const wanted = parseSlots(b.slots_wanted)
   if (wanted.length) return { text: `희망 ${wanted.join(' > ')}`, muted: true }
@@ -152,6 +154,13 @@ export default function BookingTable({
     const filtered = bookings.filter((b) => {
       const isPast = b.date < today
 
+      // 확정 여부는 판정(decision)이 기준이다.
+      // status 만 보면 판정에서 확정된 건이 '대기 중' 으로 잡혀 숫자가 어긋난다.
+      const isConfirmed =
+        b.decision === 'confirmed_auto' ||
+        b.decision === 'confirmed_human' ||
+        (!b.decision && b.status === 'confirmed')
+
       if (statusFilter === 'past') {
         // 지난 예약만
         if (!isPast) return false
@@ -160,7 +169,8 @@ export default function BookingTable({
       } else {
         // 대기·확정은 앞으로 처리할 대상이므로 지난 것은 뺀다.
         if (isPast) return false
-        if (b.status !== statusFilter) return false
+        if (statusFilter === 'confirmed' && !isConfirmed) return false
+        if (statusFilter === 'pending' && isConfirmed) return false
       }
 
       if (!q) return true
@@ -185,11 +195,16 @@ export default function BookingTable({
   const counts = useMemo(() => {
     const today = todayString()
     const upcoming = bookings.filter((b) => b.date >= today)
+    // 필터와 같은 기준(판정)으로 센다. 기준이 다르면 '확정 0' 인데 확정 줄이 보이는 일이 생긴다.
+    const done = (b: Booking) =>
+      b.decision === 'confirmed_auto' ||
+      b.decision === 'confirmed_human' ||
+      (!b.decision && b.status === 'confirmed')
 
     return {
       all: bookings.length,
-      pending: upcoming.filter((b) => b.status === 'pending').length,
-      confirmed: upcoming.filter((b) => b.status === 'confirmed').length,
+      pending: upcoming.filter((b) => !done(b)).length,
+      confirmed: upcoming.filter((b) => done(b)).length,
       past: bookings.filter((b) => b.date < today).length,
     }
   }, [bookings])
@@ -671,16 +686,16 @@ export default function BookingTable({
                                 ? 'cursor-pointer active:translate-y-[2px] active:shadow-none'
                                 : 'cursor-default opacity-70'
                             } ${
-                              booking.status === 'pending'
-                                ? 'bg-[#ffc800] text-[#042c60]'
-                                : 'bg-[#58cc02] text-white'
+                              isConfirmedDecision || booking.status === 'confirmed'
+                                ? 'bg-[#58cc02] text-white'
+                                : 'bg-[#ffc800] text-[#042c60]'
                             }`}
                           >
                             {isBusy
                               ? '처리 중'
-                              : booking.status === 'pending'
-                                ? '대기 중'
-                                : '확정 완료'}
+                              : isConfirmedDecision || booking.status === 'confirmed'
+                                ? '확정 완료'
+                                : '대기 중'}
                           </button>
                           {booking.decision && (
                             <div className="text-xs font-bold text-[#555555]">

@@ -6,6 +6,7 @@
  */
 import { supabase } from '../supabaseClient'
 import { decide, toBookingPatch, type DecideResult } from './decide'
+import { parseSlots, type Slot } from './slots'
 import { syncCalendar } from './calendarSync'
 import type { BookingRow } from './types'
 
@@ -56,20 +57,83 @@ export async function judgeAndSave(
   }
 }
 
-/** pending 인 예약을 접수 순서대로 전부 판정한다. 돌린 건수와 캘린더 실패를 돌려준다. */
-export async function judgeAllPending(
+/** 아직 자리를 못 받은 상태들. 확정된 것은 건드리지 않는다. */
+const UNSETTLED = ['pending', 'review', 'rejected', 'asking']
+
+/**
+ * 여러 건을 접수 순서대로 판정한다.
+ *
+ * 한 건 저장할 때마다 목록을 갈아끼운다.
+ * 그래야 앞 건이 확정한 칸을 뒷 건이 보고 피한다.
+ */
+export async function judgeMany(
+  ids: number[],
   autoOn: boolean,
 ): Promise<{ judged: number; calendarErrors: string[] }> {
   let all = await fetchAllBookings()
-  const targets = all.filter((b) => b.decision === 'pending').map((b) => b.id)
+  const order = all.filter((b) => ids.includes(b.id)).map((b) => b.id)
   const calendarErrors: string[] = []
 
-  for (const id of targets) {
+  for (const id of order) {
     const current = all.find((b) => b.id === id)
     if (!current) continue
     const { row, calendarError } = await judgeAndSave(current, all, autoOn)
     if (calendarError) calendarErrors.push(calendarError)
     all = all.map((b) => (b.id === id ? row : b))
   }
-  return { judged: targets.length, calendarErrors }
+  return { judged: order.length, calendarErrors }
+}
+
+/**
+ * 아직 자리를 못 받은 예약을 전부 판정한다.
+ *
+ * 전에는 pending 만 돌려서, 충돌이 풀린 뒤에도 검토·기각 줄이 그대로 남아
+ * 한 건씩 손으로 눌러야 했다. 이제 네 상태를 다 다시 본다.
+ */
+export async function judgeAllPending(
+  autoOn: boolean,
+): Promise<{ judged: number; calendarErrors: string[] }> {
+  const all = await fetchAllBookings()
+  const ids = all.filter((b) => UNSETTLED.includes(b.decision ?? 'pending')).map((b) => b.id)
+  return judgeMany(ids, autoOn)
+}
+
+export interface SlotOverlap {
+  date: string
+  slot: Slot
+  bookings: BookingRow[]
+}
+
+/**
+ * 같은 날 같은 칸에 확정이 둘 이상 들어간 곳을 찾는다.
+ *
+ * 판정이 제대로 돌면 생기지 않아야 하지만,
+ * 낡은 후보로 확정하거나 옛 데이터가 섞이면 조용히 겹칠 수 있다.
+ * 조용히 겹치는 것이 가장 위험하므로 화면에 드러낸다.
+ */
+export function findSlotOverlaps(bookings: readonly BookingRow[]): SlotOverlap[] {
+  const bucket = new Map<string, BookingRow[]>()
+
+  for (const b of bookings) {
+    if (b.decision !== 'confirmed_auto' && b.decision !== 'confirmed_human') continue
+    for (const slot of parseSlots(b.slot_assigned)) {
+      const key = `${b.date}|${slot}`
+      const list = bucket.get(key) ?? []
+      list.push(b)
+      bucket.set(key, list)
+    }
+  }
+
+  const out: SlotOverlap[] = []
+  for (const [key, list] of bucket) {
+    if (list.length < 2) continue
+    const [date, slot] = key.split('|')
+    out.push({
+      date,
+      slot: slot as Slot,
+      // 먼저 접수한 쪽이 자리를 지킨다
+      bookings: [...list].sort((a, b) => a.created_at.localeCompare(b.created_at)),
+    })
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date))
 }

@@ -202,13 +202,17 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
           <label className={labelClass}>
             위치 {form === '외근' ? '*' : '(온라인이면 비워도 됩니다)'}
           </label>
-          {form === '온라인' && !showMap ? (
+          {form !== '외근' && !showMap ? (
             <button
               type="button"
               onClick={() => setShowMap(true)}
               className="w-full px-4 py-3 bg-[#f7f7f7] border-2 border-dashed border-[#e5e5e5] rounded-2xl font-bold text-[#777777] hover:border-[#1cb0f6] hover:text-[#1cb0f6] transition-all cursor-pointer text-sm"
             >
-              {address ? `📍 ${address}` : '온라인 예약입니다 · 눌러서 지도로 위치 넣기'}
+              {address
+                ? `📍 ${address}`
+                : form === '온라인'
+                  ? '온라인 예약입니다 · 눌러서 지도로 위치 넣기'
+                  : '눌러서 지도에서 위치 고르기 (형태를 외근으로 고르면 자동으로 열립니다)'}
             </button>
           ) : (
             <LocationPicker
