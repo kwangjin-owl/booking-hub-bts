@@ -5,6 +5,8 @@ import BookingEditModal, { type EditDraft } from './BookingEditModal'
 import MapView from './MapView'
 import { joinSlotsForDisplay, parseSlots, timeFromSlots } from '../lib/slots'
 import { decisionLabel } from '../lib/decisionMeta'
+import { useWeather } from '../lib/useWeather'
+import WeatherBadge from './WeatherBadge'
 
 interface Booking {
   id: number
@@ -16,6 +18,7 @@ interface Booking {
   decision?: string | null
   slot_assigned?: string | null
   slots_wanted?: string | null
+  form?: string | null
   address?: string | null
   detail_address?: string | null
   calendar_event_id?: string | null
@@ -102,7 +105,7 @@ export default function BookingTable({
       const { data, error } = await supabase
         .from('bookings')
         .select(
-          'id, customer, service, date, time, status, decision, slot_assigned, slots_wanted, address, detail_address, calendar_event_id, created_at',
+          'id, customer, service, date, time, status, decision, slot_assigned, slots_wanted, form, address, detail_address, calendar_event_id, created_at',
         )
 
       if (error) {
@@ -116,6 +119,26 @@ export default function BookingTable({
 
     fetchBookings()
   }, [refreshKey])
+
+  /**
+   * 날씨를 볼 대상: 확정된 외근 예약.
+   * 온라인은 갈 일이 없고, 대기 중인 것은 아직 갈지 모른다.
+   * 확정 여부는 캘린더 확정(status)이든 판정 확정(decision)이든 둘 중 하나면 본다.
+   */
+  const weatherTargets = useMemo(
+    () =>
+      bookings
+        .filter(
+          (b) =>
+            b.form === '외근' &&
+            (b.status === 'confirmed' ||
+              b.decision === 'confirmed_auto' ||
+              b.decision === 'confirmed_human'),
+        )
+        .map((b) => ({ id: b.id, date: b.date, address: b.address ?? null })),
+    [bookings],
+  )
+  const weather = useWeather(weatherTargets)
 
   /** 검색어와 상태 필터를 함께 적용한다. */
   const visible = useMemo(() => {
@@ -543,6 +566,12 @@ export default function BookingTable({
                         {booking.created_at && (
                           <span className="block text-[10px] font-bold text-[#afafaf]">
                             등록 {shortDate(booking.created_at)}
+                          </span>
+                        )}
+                        {/* 확정된 외근이면 그 날 예보를 같이 보여준다 */}
+                        {weather[booking.id] !== undefined && (
+                          <span className="block mt-1">
+                            <WeatherBadge state={weather[booking.id]} />
                           </span>
                         )}
                       </td>
