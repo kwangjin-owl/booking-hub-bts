@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../supabaseClient'
 import { judge } from '../lib/judge'
+import { decide, type Booking as DecideBooking } from '../lib/decide'
 import AddressSearch from './AddressSearch'
 
 interface BookingFormProps {
@@ -78,6 +79,45 @@ export default function BookingForm({ onSuccess }: BookingFormProps) {
       setError(`예약 추가 실패: ${insertError.message}`)
       setLoading(false)
       return
+    }
+
+    // 판정 실행
+    if (data && data.length > 0) {
+      try {
+        const autoOn = localStorage.getItem('auto-judge') !== 'false'
+        const { data: allBookings } = await supabase.from('bookings').select('*')
+
+        if (allBookings) {
+          const newBooking = data[0]
+          const decideBooking: DecideBooking = {
+            id: newBooking.id,
+            kind: newBooking.kind,
+            date: newBooking.date,
+            slots_wanted: newBooking.slots_wanted,
+            decision: newBooking.decision,
+            slot_assigned: newBooking.slot_assigned,
+            reason: newBooking.reason,
+            options: newBooking.options,
+            trace: newBooking.trace,
+            customer: newBooking.customer,
+          }
+
+          const result = decide(decideBooking, allBookings, autoOn)
+
+          await supabase
+            .from('bookings')
+            .update({
+              decision: result.decision,
+              slot_assigned: result.slotAssigned || null,
+              reason: result.reason,
+              options: result.options ? result.options.join(',') : null,
+              trace: result.trace.join('\n'),
+            })
+            .eq('id', newBooking.id)
+        }
+      } catch (err) {
+        console.error('판정 실패:', err)
+      }
     }
 
     setCustomer('')

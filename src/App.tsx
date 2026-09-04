@@ -10,6 +10,10 @@ import WeatherCard from './components/WeatherCard'
 import CalendarView from './components/CalendarView'
 import PendingReview from './components/PendingReview'
 import LoginPage from './components/LoginPage'
+import AutoJudgeControl from './components/AutoJudgeControl'
+import WorkflowGraph from './components/WorkflowGraph'
+import DecisionLog from './components/DecisionLog'
+import StatusBoard from './components/StatusBoard'
 
 type TabType = '대시보드' | '예약' | '예약 추가' | '미확정 관리'
 type ListViewType = '목록' | '캘린더'
@@ -215,16 +219,27 @@ export default function App() {
                   : '등록한 예약은 관리자가 확인 후 확정합니다.'
               }
             />
-            <StatCards
-              refreshKey={refreshKey}
-              onSelect={(target) => {
-                setListFilter(target)
-                setFilterNonce((n) => n + 1)
-                setListView('목록')
-                setActiveTab('예약')
-              }}
-            />
-            <WeatherCard refreshKey={refreshKey} />
+            {isAdmin ? (
+              <>
+                <AutoJudgeControl />
+                <WorkflowGraph refreshKey={refreshKey} />
+                <DecisionLog />
+                <StatusBoard />
+              </>
+            ) : (
+              <>
+                <StatCards
+                  refreshKey={refreshKey}
+                  onSelect={(target) => {
+                    setListFilter(target)
+                    setFilterNonce((n) => n + 1)
+                    setListView('목록')
+                    setActiveTab('예약')
+                  }}
+                />
+                <WeatherCard refreshKey={refreshKey} />
+              </>
+            )}
           </div>
         )}
 
